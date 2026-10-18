@@ -49,13 +49,27 @@ def test_t01_to_t17_executed_gives_team_16s_numbers():
     assert coverage["system"]["basis"].endswith(": AC-01, AC-06, AC-07, AC-08, AC-10")
 
 
+def test_the_basis_reads_word_for_word_as_team_16s():
+    # copies both sentences from Team 16's live report against their own system, 2026-10-18
+    from Tester import suite
+
+    coverage = suite.tag_coverage(outcomes())
+    assert coverage["component"]["basis"] == (
+        "Components C1-C7 listed in the pod specification exercised by at least one executed test: C1, C2, C3, C5, C6"
+    )
+    assert coverage["system"]["basis"] == (
+        "Acceptance criteria AC-01 to AC-10 in the pod specification exercised by at least one executed test: "
+        "AC-01, AC-06, AC-07, AC-08, AC-10"
+    )
+
+
 def test_a_skipped_test_covers_nothing():
     from Tester import suite
 
     everything = {t.test_id for t in suite.TESTS}
     coverage = suite.tag_coverage(outcomes(skip=everything - {"T-15"}))
     assert coverage["component"]["covered"] == 2 and coverage["component"]["basis"].endswith(": C1, C6")
-    assert coverage["system"]["covered"] == 1 and coverage["system"]["basis"].endswith(": AC-06")
+    assert coverage["system"]["covered"] == 2 and coverage["system"]["basis"].endswith(": AC-06, AC-08")
 
 
 def test_all_skipped_covers_none_but_still_counts():

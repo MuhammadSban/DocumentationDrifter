@@ -91,6 +91,8 @@ def case_for(test_id: str) -> dict:
 def analysis(request_body: dict) -> dict:
     # builds a result shaped like the contract's, a fixture commit answering as the data file expects
     case = expected_case(request_body["commit_id"], request_body.get("base_commit")) or {}
+    if case.get("root"):
+        case = {**case, "changes": [{"path": p, "old_path": None, "change_type": "ADDED", "category": "OTHER"} for p in case["root_paths"]]}
     return {
         "analysis_id": f"an-{uuid.uuid4().hex}",
         "repository": request_body["repository"],

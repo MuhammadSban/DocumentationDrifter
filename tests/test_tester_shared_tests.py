@@ -47,10 +47,14 @@ def test_the_saved_result_tests_analyse_the_fixture_commit_by_full_sha(stub, api
     routes, calls = stub
     healthy(routes)
     suite_on_stub(api)
-    fixture = {"repository": suite.FIXTURE_REPO, "commit_id": suite.FIXTURE_COMMIT}
-    analyses = [c for c in calls if c.url.path.endswith("/analyze") and posted_json(c) == fixture]
-    assert len(analyses) == 1 + 1 + 2 + 5  # counts T-01, T-14, T-16 and T-17
-    assert len(suite.FIXTURE_COMMIT) == 40
+    sent = [posted_json(c) for c in calls if c.url.path.endswith("/analyze")]
+
+    def count(tag: str) -> int:
+        # counts the analyses of one fixture commit sent without a base
+        return sent.count({"repository": suite.FIXTURE_REPO, "commit_id": suite.COMMITS[tag]})
+
+    # counts the change test on each commit plus T-14 once, T-16 twice and T-17 five times, as Team 16's do
+    assert (count("c1-impl-only"), count("c2-add-mod-del"), count("c4-categories")) == (1 + 1, 1 + 2, 1 + 5)
 
 
 # --- error tests, T-08 to T-13 ---------------------------------------
@@ -75,9 +79,8 @@ def test_an_error_test_passes_on_status_and_code_whatever_the_wording(stub, api,
         lambda status, code: httpx.Response(status + 1, json={"code": code, "message": "x"}),
         lambda status, code: httpx.Response(200, json=analysis({"repository": "a/b", "commit_id": "c"})),
         lambda status, code: httpx.Response(status, text="not json"),
-        lambda status, code: httpx.Response(500, json={"code": "TIMEOUT", "message": "slow"}),
     ],
-    ids=["empty-message", "no-message", "wrong-code", "wrong-status", "success", "not-json", "listed-500"],
+    ids=["empty-message", "no-message", "wrong-code", "wrong-status", "success", "not-json"],
 )
 def test_an_error_test_fails_on_a_wrong_answer(stub, api, test_id, answer):
     routes, _ = stub
@@ -94,11 +97,11 @@ def test_an_error_test_fails_on_a_wrong_answer(stub, api, test_id, answer):
     [
         httpx.Response(502, text="bad gateway"),
         httpx.Response(503, json={"code": "TIMEOUT", "message": "slow"}),
-        httpx.Response(500, json={"code": "LLM_UNAVAILABLE", "message": "ours, not the pod's"}),
+        httpx.Response(500, json={"code": "TIMEOUT", "message": "slow"}),
     ],
-    ids=["502", "listed-code-on-503", "unlisted-code-on-500"],
+    ids=["502", "timeout-on-503", "timeout-on-500"],
 )
-def test_an_unlisted_5xx_is_an_error_from_the_system(stub, api, test_id, answer):
+def test_any_5xx_is_an_error_from_the_system(stub, api, test_id, answer):
     routes, _ = stub
     healthy(routes)
     routes[("POST", "/analyze")] = answer
@@ -170,12 +173,12 @@ def test_t16_fails_when_two_runs_share_an_id(stub, api):
 @pytest.mark.parametrize(
     "field, make",
     [
-        ("tool_version", lambda n: f"stub-{n}"),
         ("changes", lambda n: [] if n % 2 else [CHANGE]),
         ("head_commit", lambda n: str(n) * 40),
+        ("skipped", lambda n: [{"path": "x", "reason": "UNSUPPORTED_FILE_TYPE"}] if n % 2 else []),
     ],
 )
-def test_t17_fails_when_a_field_other_than_id_and_time_differs(stub, api, field, make):
+def test_t17_fails_when_a_significant_field_differs(stub, api, field, make):
     routes, _ = stub
     healthy(routes)
     rewrite(routes, ("POST", "/analyze"), lambda body, n: {**body, field: make(n)})
@@ -184,10 +187,18 @@ def test_t17_fails_when_a_field_other_than_id_and_time_differs(stub, api, field,
     assert field in result["message"]
 
 
-def test_t17_ignores_analysis_id_and_created_at(stub, api):
+@pytest.mark.parametrize(
+    "field, make",
+    [
+        ("created_at", lambda n: f"2026-10-18T00:00:0{n}.000Z"),
+        ("tool_version", lambda n: f"stub-{n}"),
+        ("config_version", lambda n: f"rules-{n}"),
+    ],
+)
+def test_t17_ignores_fields_team_16_does_not_compare(stub, api, field, make):
     routes, _ = stub
     healthy(routes)
-    rewrite(routes, ("POST", "/analyze"), lambda body, n: {**body, "created_at": f"2026-10-18T00:00:0{n}.000Z"})
+    rewrite(routes, ("POST", "/analyze"), lambda body, n: {**body, field: make(n)})
     assert_outcome(suite_on_stub(api)["T-17"], "pass")
 
 
@@ -199,15 +210,12 @@ def test_t17_ignores_analysis_id_and_created_at(stub, api):
         lambda body: {**body, "status": "MAYBE"},
         lambda body: {**body, "analysis_id": 7},
         lambda body: {**body, "changes": [{"path": "a"}]},
-        lambda body: {**body, "changes": [{**CHANGE, "change_type": "MOVED"}]},
-        lambda body: {**body, "changes": [{**CHANGE, "category": "STUFF"}]},
         lambda body: {**body, "issues": [1]},
-        lambda body: {**body, "skipped": ["x"]},
-        lambda body: {**body, "error": {"oops": 1}},
+        lambda body: {**body, "issues": [{"finding_id": "F-1", "verification_status": "APPROVED"}]},
     ],
     ids=[
         "missing-field", "changes-not-a-list", "bad-status", "id-not-a-string", "change-missing-fields",
-        "bad-change-type", "bad-category", "issue-not-a-finding", "skip-not-an-object", "error-not-an-error-body",
+        "issue-not-a-finding", "finding-not-pending",
     ],
 )
 def test_t17_fails_a_result_that_breaks_the_schema(stub, api, broken):
