@@ -199,7 +199,7 @@ def test_known_differences_by_choice_are_removed_before_comparing():
             {"path": "huge.txt", "old_path": None, "change_type": "ADDED", "category": "DOCUMENTATION"},
             {"path": "logo.png", "old_path": None, "change_type": "ADDED", "category": "OTHER"},
         ],
-        "skipped": [{"path": "huge.txt", "reason": "FILE_TOO_LARGE"}, {"path": "logo.png", "reason": "UNSUPPORTED_FILE_TYPE"}],
+        "skipped": [{"path": "logo.png", "reason": "UNSUPPORTED_FILE_TYPE"}],
     }
     theirs = {
         "changes": [

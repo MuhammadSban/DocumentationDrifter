@@ -107,13 +107,14 @@ def test_hidden_paths_are_ignored(api, make_repo):
 
 
 @pytest.mark.skipif(not SYMLINKS, reason="needs symlink support")
-def test_symlink_is_listed_and_skipped(api, make_repo):
+def test_symlink_is_listed_and_skipped_by_its_name_alone(api, make_repo):
     repo = make_repo()
     repo.commit({"target.txt": "t\n"})
     head = repo.commit({"real.txt": "r\n"}, symlinks={"link.txt": "target.txt"})
     body = analyse(api, head)
     assert listing(body) == [("link.txt", "ADDED", None), ("real.txt", "ADDED", None)]
-    assert skipped(body) == [("link.txt", "UNSUPPORTED_FILE_TYPE")]
+    # keeps a symlink named like a supported file, as Team 16's system does (TT-Q13)
+    assert skipped(body) == []
 
 
 def test_submodule_is_listed_and_skipped(api, make_repo):
@@ -185,8 +186,8 @@ def test_switch_between_file_and_submodule_is_type_changed_both_ways(api, make_r
     to_module = repo.commit({}, gitlinks={"vendor/lib": "1" * 40})
     repo.run("rm", "--quiet", "--cached", "vendor/lib")
     back = repo.commit({"vendor/lib": "regular again\n"})
-    # lists one TYPE_CHANGED change either way, and skips neither
+    # lists one TYPE_CHANGED change either way, skipped by its name alone since lib has no supported extension
     for head in (to_module, back):
         body = analyse(api, head)
         assert listing(body) == [("vendor/lib", "TYPE_CHANGED", None)]
-        assert skipped(body) == []
+        assert skipped(body) == [("vendor/lib", "UNSUPPORTED_FILE_TYPE")]

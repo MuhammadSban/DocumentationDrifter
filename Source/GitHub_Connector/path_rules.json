@@ -11,5 +11,7 @@
     {"pattern": "*.sh", "category": "IMPLEMENTATION"}
   ],
   "fallback": "OTHER",
-  "unsupported": [".ai", ".html", ".lock", ".png", ".svg"]
+  "supported_extensions": [".py", ".ipynb", ".js", ".ts", ".java", ".c", ".h", ".cpp", ".hpp", ".go", ".rs", ".rb", ".sh",
+    ".sql", ".md", ".rst", ".txt", ".yaml", ".yml", ".json", ".toml", ".cfg", ".ini", ".csv"],
+  "supported_filenames": ["LICENSE", "Makefile", "Dockerfile", "README", "CODEOWNERS"]
 }

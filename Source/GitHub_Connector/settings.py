@@ -36,8 +36,6 @@ class AnalysisSettings(BaseSettings):
     # lists the ordered path rules, config_version is a hash of this file
     rules_file: Path = PACKAGE_DIR / "path_rules.json"
 
-    # skips any changed file over this many bytes
-    max_file_bytes: int = 1024 * 1024
 
     # caps each git call and the whole analysis, both end in 500 TIMEOUT
     git_timeout: float = 60

@@ -84,7 +84,8 @@ def skip(path, reason):
     return {"path": path, "reason": reason}
 
 
-UNSUPPORTED, BINARY, TOO_LARGE, NOT_UTF8 = "UNSUPPORTED_FILE_TYPE", "BINARY_FILE", "FILE_TOO_LARGE", "NOT_UTF8"
+# names the one skip reason, given by a file's name alone (TT-Q13)
+UNSUPPORTED = "UNSUPPORTED_FILE_TYPE"
 
 # maps each label to (head, base or None, changes, skipped), written by hand to check intent
 EXPECTED = {
@@ -120,8 +121,8 @@ EXPECTED = {
         change("vendor/lib", "ADDED", "OTHER"),
     ], [skip("vendor/lib", UNSUPPORTED)]),
     "binary": ("binary", None, [change("assets/logo.png", "ADDED", "OTHER")], [skip("assets/logo.png", UNSUPPORTED)]),
-    "oversize": ("oversize", None, [change("data/big.csv", "ADDED", "OTHER")], [skip("data/big.csv", TOO_LARGE)]),
-    "non-utf8": ("non-utf8", None, [change("docs/latin1.txt", "ADDED", "DOCUMENTATION")], [skip("docs/latin1.txt", NOT_UTF8)]),
+    "oversize": ("oversize", None, [change("data/big.csv", "ADDED", "OTHER")], []),
+    "non-utf8": ("non-utf8", None, [change("docs/latin1.txt", "ADDED", "DOCUMENTATION")], []),
     "requirements-file": ("requirements-file", None, [
         change("docs/requirements.txt", "ADDED", "OTHER"),
         change("requirements-dev.txt", "ADDED", "OTHER"),
@@ -144,8 +145,6 @@ EXPECTED = {
         change("vendor/other", "ADDED", "OTHER"),
     ], [
         skip("assets/icon.png", UNSUPPORTED),
-        skip("data/huge.txt", TOO_LARGE),
-        skip("misc/latin.txt", NOT_UTF8),
         skip("mixlink", UNSUPPORTED),
         skip("vendor/other", UNSUPPORTED),
     ]),

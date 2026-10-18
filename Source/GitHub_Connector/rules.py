@@ -1,5 +1,5 @@
 # gives each changed path a category from the ordered rules file, first match wins,
-# and says which file types are skipped unread
+# and says which changed files are skipped, by name alone as Team 16's system does (TT-Q13)
 
 from __future__ import annotations
 
@@ -20,7 +20,8 @@ class _Rules:
     raw: bytes
     rules: list[tuple[str, Category]]
     fallback: Category
-    unsupported_exts: tuple[str, ...]
+    supported_exts: frozenset[str]
+    supported_names: frozenset[str]
 
 
 def _rules(rules_file: Path) -> _Rules:
@@ -35,8 +36,8 @@ def _load(rules_file: Path, _mtime: int, _size: int) -> _Rules:
     raw = rules_file.read_bytes().replace(b"\r\n", b"\n")
     data = json.loads(raw)
     rules = [(r["pattern"], Category(r["category"])) for r in data.get("rules", [])]
-    exts = tuple(ext.lower() for ext in data.get("unsupported", []))
-    return _Rules(raw, rules, Category(data["fallback"]), exts)
+    exts = frozenset(ext.lower() for ext in data["supported_extensions"])
+    return _Rules(raw, rules, Category(data["fallback"]), exts, frozenset(data["supported_filenames"]))
 
 
 def config_version() -> str:
@@ -53,10 +54,14 @@ def classify(path: str) -> Category:
     return loaded.fallback
 
 
-def is_unsupported(path: str) -> bool:
-    # says whether a path's file type is on the denylist, so it is skipped without being read
-    name = path.rsplit("/", 1)[-1].lower()
-    return name.endswith(_rules(get_settings().rules_file).unsupported_exts)
+def is_skipped(path: str) -> bool:
+    # skips a file unless its extension, any case, or its exact name is on the supported lists
+    loaded = _rules(get_settings().rules_file)
+    name = path.rsplit("/", 1)[-1]
+    dot = name.rfind(".")
+    # reads an extension only after a leading character and before a trailing one, so .gitignore and a. have none
+    ext = name[dot:].lower() if 0 < dot < len(name) - 1 else ""
+    return ext not in loaded.supported_exts and name not in loaded.supported_names
 
 
 def matches(pattern: str, path: str) -> bool:

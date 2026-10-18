@@ -64,10 +64,6 @@ def normalise(body: Any) -> Any:
     return body
 
 
-# names the skip reasons only our safety net gives, theirs skips by file type alone (decision T12-Q2)
-OUR_EXTRA_SKIP_REASONS = {"BINARY_FILE", "FILE_TOO_LARGE", "NOT_UTF8"}
-
-
 def _hidden(path: str | None) -> bool:
     # tells a hidden path, any segment starting with a dot
     return path is not None and any(part.startswith(".") for part in path.split("/"))
@@ -88,10 +84,9 @@ def _without_hidden(change: dict) -> dict | None:
 
 
 def comparable(ours: Any, theirs: Any) -> tuple[Any, Any]:
-    # removes the known differences by choice: our extra skip reasons and their hidden paths
+    # removes the known difference by choice: their hidden paths
     if not (isinstance(ours, dict) and isinstance(theirs, dict) and "changes" in theirs):
         return ours, theirs
-    ours = {**ours, "skipped": [s for s in ours.get("skipped", []) if s["reason"] not in OUR_EXTRA_SKIP_REASONS]}
     changes = [c for c in map(_without_hidden, theirs["changes"]) if c is not None]
     skipped = [s for s in theirs.get("skipped", []) if not _hidden(s["path"])]
     return ours, {**theirs, "changes": sorted(changes, key=lambda c: c["path"]), "skipped": skipped}

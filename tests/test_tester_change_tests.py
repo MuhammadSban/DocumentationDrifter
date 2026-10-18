@@ -54,11 +54,11 @@ def test_the_data_file_matches_the_local_fixture_repo(pod_fixtures):
 
 
 def test_our_system_passes_the_change_tests_that_need_no_category_change(tester):
-    # leaves T-02, T-04, T-05 and T-06 to the mapping and skip-reason tickets, ours says DOCUMENTATION and BINARY_FILE
+    # leaves T-02, T-04 and T-06 to the categories ticket 07, ours still says DOCUMENTATION
     sid = setup(tester).json()["session_id"]
     found = results(run(tester, sid).json())
     assert [t for t in found if t in ORDER] == ORDER
-    for test_id in ("T-01", "T-03", "T-07"):
+    for test_id in ("T-01", "T-03", "T-05", "T-07"):
         assert_outcome(found[test_id], "pass")
     assert_outcome(found["T-02"], "fail")
     assert "docs/model.md MODIFIED DOCUMENTATION" in found["T-02"]["message"]

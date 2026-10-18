@@ -33,11 +33,8 @@ REGULAR = {"100644", "100755"}
 # lists symlinks and submodules in changes[] and skips them unread, as the reference does (decision T12-Q10)
 LINKS = {"120000", "160000"}
 
-# names each skip reason as a code, in the reference service's style (decision T12-Q2)
+# names the one skip reason, as Team 16's system gives it (TT-Q13)
 SKIP_UNSUPPORTED = "UNSUPPORTED_FILE_TYPE"
-SKIP_BINARY = "BINARY_FILE"
-SKIP_TOO_LARGE = "FILE_TOO_LARGE"
-SKIP_NOT_UTF8 = "NOT_UTF8"
 
 
 @dataclass(frozen=True)
@@ -46,8 +43,6 @@ class FileChange:
     path: str
     change_type: ChangeType
     old_path: str | None = None
-    blob: str = ""  # holds the blob checked, base side for a deletion
-    link: bool = False  # marks a symlink or submodule on the side checked, never read
 
 
 @dataclass(frozen=True)
@@ -213,7 +208,7 @@ def fetch(
         # compares a first audit against the empty tree, so every file counts as added
         old = base_sha if base_sha is not None else git.out("hash-object", "-t", "tree", "--stdin")
         cmp.changes = _diff(git, old, head_sha)
-        cmp.skipped = _skipped(git, old, head_sha, cmp.changes)
+        cmp.skipped = _skipped(cmp.changes)
         yield cmp
     finally:
         _rmtree(workdir)
@@ -290,7 +285,7 @@ def _diff(git: _Git, old: str, head: str) -> list[FileChange]:
     i = 0
     while i < len(fields) and fields[i]:
         # reads ":oldmode newmode oldsha newsha status" then one or two paths
-        old_mode, new_mode, old_blob, new_blob, status = fields[i][1:].split(" ")
+        old_mode, new_mode, _, _, status = fields[i][1:].split(" ")
         letter = status[0]
         if letter == "R":
             old_path, new_path = fields[i + 1], fields[i + 2]
@@ -298,99 +293,23 @@ def _diff(git: _Git, old: str, head: str) -> list[FileChange]:
             # checks each side on its own, so an ignored path never shows, not even as old_path
             old_ok, new_ok = listed(old_path, old_mode), listed(new_path, new_mode)
             if old_ok and new_ok:
-                changes.append(FileChange(new_path, ChangeType.RENAMED, old_path, new_blob, new_mode in LINKS))
+                changes.append(FileChange(new_path, ChangeType.RENAMED, old_path))
             elif new_ok:
-                changes.append(FileChange(new_path, ChangeType.ADDED, blob=new_blob, link=new_mode in LINKS))
+                changes.append(FileChange(new_path, ChangeType.ADDED))
             elif old_ok:
-                changes.append(FileChange(old_path, ChangeType.DELETED, blob=old_blob, link=old_mode in LINKS))
+                changes.append(FileChange(old_path, ChangeType.DELETED))
             continue
         path = fields[i + 1]
         i += 2
         # judges the head side, or the base side for a deletion
         if letter == "D":
             if listed(path, old_mode):
-                changes.append(FileChange(path, ChangeType.DELETED, blob=old_blob, link=old_mode in LINKS))
+                changes.append(FileChange(path, ChangeType.DELETED))
         elif listed(path, new_mode):
-            changes.append(FileChange(path, _STATUS[letter], blob=new_blob, link=new_mode in LINKS))
+            changes.append(FileChange(path, _STATUS[letter]))
     return changes
 
 
-def _skipped(git: _Git, old: str, head: str, changes: list[FileChange]) -> list[SkippedFile]:
-    # lists the changes that can't be read as text, file type first, then binary, size and UTF-8
-    skipped: list[SkippedFile] = []
-    rest: list[FileChange] = []
-    for c in changes:
-        if c.link:
-            # skips a symlink or submodule unread, but a switch to or from one isn't skipped
-            if c.change_type != ChangeType.TYPE_CHANGED:
-                skipped.append(SkippedFile(c.path, SKIP_UNSUPPORTED))
-        elif rules.is_unsupported(c.path):
-            skipped.append(SkippedFile(c.path, SKIP_UNSUPPORTED))
-        else:
-            rest.append(c)
-    if not rest:
-        return skipped
-    binary = _numstat_binaries(git, old, head, [c.path for c in rest])
-    sizes = _sizes(git, [c.blob for c in rest])
-    cap = get_settings().max_file_bytes
-    to_read: list[FileChange] = []
-    for c in rest:
-        if c.path in binary:
-            skipped.append(SkippedFile(c.path, SKIP_BINARY))
-        elif sizes[c.blob] > cap:
-            skipped.append(SkippedFile(c.path, SKIP_TOO_LARGE))
-        else:
-            to_read.append(c)
-    for c, data in zip(to_read, _contents(git, [c.blob for c in to_read])):
-        if b"\0" in data[:8000]:
-            skipped.append(SkippedFile(c.path, SKIP_BINARY))
-        else:
-            try:
-                data.decode("utf-8")
-            except UnicodeDecodeError:
-                skipped.append(SkippedFile(c.path, SKIP_NOT_UTF8))
-    return skipped
-
-
-def _numstat_binaries(git: _Git, old: str, head: str, paths: list[str]) -> set[str]:
-    # asks git which of paths are binary, which also fetches their blobs in one batch and no others
-    raw = git.run("diff", "--numstat", "-z", "-M", "--no-ext-diff", old, head, "--", *paths).stdout
-    fields = raw.decode("utf-8", "surrogateescape").split("\0")
-    binary: set[str] = set()
-    i = 0
-    while i < len(fields) and fields[i]:
-        added, deleted, path = fields[i].split("\t", 2)
-        if path == "":
-            # names a rename, the old and new paths follow as their own fields
-            path = fields[i + 2]
-            i += 3
-        else:
-            i += 1
-        if added == "-" and deleted == "-":
-            binary.add(path)
-    return binary
-
-
-def _sizes(git: _Git, blobs: list[str]) -> dict[str, int]:
-    # reads blob sizes in one call, without reading their contents
-    out = git.run("cat-file", "--batch-check", input="".join(b + "\n" for b in blobs).encode()).stdout
-    sizes = {}
-    for line in out.decode().splitlines():
-        oid, _, size = line.split(" ")
-        sizes[oid] = int(size)
-    return sizes
-
-
-def _contents(git: _Git, blobs: list[str]) -> list[bytes]:
-    # reads several blobs in one call, in the order asked
-    if not blobs:
-        return []
-    out = git.run("cat-file", "--batch", input="".join(b + "\n" for b in blobs).encode()).stdout
-    contents, pos = [], 0
-    for _ in blobs:
-        header_end = out.index(b"\n", pos)
-        size = int(out[pos:header_end].split(b" ")[2])
-        start = header_end + 1
-        contents.append(out[start:start + size])
-        pos = start + size + 1
-    return contents
+def _skipped(changes: list[FileChange]) -> list[SkippedFile]:
+    # lists the changes whose names are outside the supported lists, never reading a file (TT-Q13)
+    return [SkippedFile(c.path, SKIP_UNSUPPORTED) for c in changes if rules.is_skipped(c.path)]

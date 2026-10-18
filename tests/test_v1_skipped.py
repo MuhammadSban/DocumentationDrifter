@@ -1,4 +1,4 @@
-# covers tickets 06 and 16: unreadable files are skipped with a reason code and still reported as changes
+# covers cross-team tester ticket 06: a changed file is skipped by its name alone, as Team 16's system does (TT-Q13)
 
 import json
 from pathlib import Path
@@ -22,115 +22,88 @@ def paths(items):
     return [i["path"] for i in items]
 
 
-def reason_for(body, path):
-    # finds the skip reason recorded for one path
-    return next(s["reason"] for s in body["skipped"] if s["path"] == path)
-
-
 def test_skipped_file_is_still_reported_as_a_change(api, make_repo):
     repo = make_repo()
-    repo.commit({"seed": "0\n"})
+    repo.commit({"seed.txt": "0\n"})
     body = analyse(api, repo.commit({"logo.bin": b"\0\1\2", "notes.md": "hi\n"}))
-    assert paths(body["skipped"]) == ["logo.bin"]
-    assert [(c["path"], c["change_type"], c["category"]) for c in body["changes"]] == [
-        ("logo.bin", "ADDED", "OTHER"),
-        ("notes.md", "ADDED", "DOCUMENTATION"),
+    assert body["skipped"] == [{"path": "logo.bin", "reason": "UNSUPPORTED_FILE_TYPE"}]
+    assert paths(body["changes"]) == ["logo.bin", "notes.md"]
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["a.py", "a.ipynb", "a.js", "a.ts", "a.java", "a.c", "a.h", "a.cpp", "a.hpp", "a.go", "a.rs", "a.rb", "a.sh", "a.sql",
+     "a.md", "a.rst", "a.txt", "a.yaml", "a.yml", "a.json", "a.toml", "a.cfg", "a.ini", "a.csv",
+     "NOTES.TXT", "Script.PY", "LICENSE", "Makefile", "Dockerfile", "README", "CODEOWNERS", "sub/dir/README"],
+)
+def test_a_supported_name_is_not_skipped(name):
+    from GitHub_Connector import rules
+
+    assert not rules.is_skipped(name)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["a.png", "a.bin", "a.svg", "a.html", "a.xml", "a.pdf", "Pipfile.lock", "archive.tar.gz", "seed", "vendor/lib",
+     "license", "makefile", "README.MD.bak", ".gitignore", "docs/.env", "a."],
+)
+def test_any_other_name_is_skipped(name):
+    from GitHub_Connector import rules
+
+    assert rules.is_skipped(name)
+
+
+def test_content_never_decides_a_skip(api, make_repo):
+    repo = make_repo()
+    repo.commit({"seed.txt": "0\n"})
+    head = repo.commit({
+        "zero.txt": b"text" * 100 + b"\0" + b"more\n",
+        "big.md": b"a" * (2 * MB),
+        "latin1.txt": "café crème\n".encode("latin-1"),
+        "text.png": "not an image\n",
+    })
+    body = analyse(api, head)
+    assert body["skipped"] == [{"path": "text.png", "reason": "UNSUPPORTED_FILE_TYPE"}]
+    assert paths(body["changes"]) == ["big.md", "latin1.txt", "text.png", "zero.txt"]
+
+
+def test_deleted_and_renamed_files_are_skipped_by_their_reported_path(api, make_repo):
+    repo = make_repo()
+    repo.commit({"logo.png": PNG, "old.png": b"OLD" * 900, "keep.txt": "k\n"})
+    body = analyse(api, repo.commit({"logo.png": None, "old.png": None, "new.png": b"OLD" * 900}))
+    assert paths(body["skipped"]) == ["logo.png", "new.png"]
+    assert [(c["path"], c["change_type"], c["old_path"]) for c in body["changes"]] == [
+        ("logo.png", "DELETED", None),
+        ("new.png", "RENAMED", "old.png"),
     ]
 
 
-def test_nul_byte_in_the_first_8kb_marks_binary(api, make_repo):
-    repo = make_repo()
-    repo.commit({"seed": "0\n"})
-    body = analyse(api, repo.commit({"data.txt": b"text" * 100 + b"\0" + b"more\n"}))
-    assert reason_for(body, "data.txt") == "BINARY_FILE"
-
-
-def test_size_cap_is_exact(api, make_repo):
-    repo = make_repo()
-    repo.commit({"seed": "0\n"})
-    head = repo.commit({"big.txt": b"a" * MB + b"\n", "fits.txt": b"a" * (MB - 1) + b"\n"})
-    body = analyse(api, head)
-    assert paths(body["skipped"]) == ["big.txt"]
-    assert reason_for(body, "big.txt") == "FILE_TOO_LARGE"
-    assert paths(body["changes"]) == ["big.txt", "fits.txt"]
-
-
-def test_non_utf8_file_is_skipped(api, make_repo):
-    repo = make_repo()
-    repo.commit({"seed": "0\n"})
-    body = analyse(api, repo.commit({"latin1.txt": "café crème\n".encode("latin-1")}))
-    assert reason_for(body, "latin1.txt") == "NOT_UTF8"
-    assert paths(body["changes"]) == ["latin1.txt"]
-
-
-def test_deleted_binary_is_still_skipped(api, make_repo):
-    repo = make_repo()
-    repo.commit({"logo.png": PNG, "keep": "k\n"})
-    body = analyse(api, repo.commit({"logo.png": None}))
-    assert paths(body["skipped"]) == ["logo.png"]
-    assert [(c["path"], c["change_type"]) for c in body["changes"]] == [("logo.png", "DELETED")]
-
-
-def test_unchanged_binary_and_big_files_are_not_skipped(api, make_repo):
+def test_unchanged_files_are_never_skipped(api, make_repo):
     repo = make_repo()
     repo.commit({"logo.png": PNG, "big.txt": b"a" * (2 * MB)})
-    body = analyse(api, repo.commit({"readme": "changed\n"}))
+    body = analyse(api, repo.commit({"readme.md": "changed\n"}))
     assert body["skipped"] == []
-    assert paths(body["changes"]) == ["readme"]
+    assert paths(body["changes"]) == ["readme.md"]
 
 
 def test_skipped_is_sorted_by_path(api, make_repo):
     repo = make_repo()
-    repo.commit({"seed": "0\n"})
+    repo.commit({"seed.txt": "0\n"})
     body = analyse(api, repo.commit({"z.png": PNG, "a.png": PNG, "m.bin": b"\0\1\2"}))
     assert paths(body["skipped"]) == ["a.png", "m.bin", "z.png"]
 
 
-def test_hidden_binary_is_in_neither_list(api, make_repo):
-    repo = make_repo()
-    repo.commit({"seed": "0\n"})
-    body = analyse(api, repo.commit({".assets/logo.png": PNG}))
-    assert body["skipped"] == [] and body["changes"] == []
-
-
-def test_renamed_binary_is_skipped_under_its_new_path(api, make_repo):
-    repo = make_repo()
-    repo.commit({"old.png": PNG})
-    body = analyse(api, repo.commit({"old.png": None, "new.png": PNG}))
-    assert paths(body["skipped"]) == ["new.png"]
-    assert [(c["path"], c["change_type"], c["old_path"]) for c in body["changes"]] == [("new.png", "RENAMED", "old.png")]
-
-
-def test_unsupported_file_type_is_skipped_before_any_content_check(api, make_repo):
-    repo = make_repo()
-    repo.commit({"seed": "0\n"})
-    body = analyse(api, repo.commit({"logo.png": PNG, "Pipfile.lock": "{}\n"}))
-    assert body["skipped"] == [
-        {"path": "Pipfile.lock", "reason": "UNSUPPORTED_FILE_TYPE"},
-        {"path": "logo.png", "reason": "UNSUPPORTED_FILE_TYPE"},
-    ]
-    assert [(c["path"], c["category"]) for c in body["changes"]] == [("Pipfile.lock", "OTHER"), ("logo.png", "OTHER")]
-
-
-def test_large_file_of_an_unsupported_type_gets_the_type_code(api, make_repo):
-    repo = make_repo()
-    repo.commit({"seed": "0\n"})
-    body = analyse(api, repo.commit({"art/logo.ai": b"%!PS-Adobe\n" + b"a" * (2 * MB)}))
-    assert body["skipped"] == [{"path": "art/logo.ai", "reason": "UNSUPPORTED_FILE_TYPE"}]
-    assert paths(body["changes"]) == ["art/logo.ai"]
-
-
-def test_the_denylist_lives_in_the_rules_file(api, make_repo, tmp_path, monkeypatch):
+def test_the_supported_names_live_in_the_rules_file(api, make_repo, tmp_path, monkeypatch):
     from GitHub_Connector.settings import get_settings
 
     repo = make_repo()
-    repo.commit({"seed": "0\n"})
+    repo.commit({"seed.txt": "0\n"})
     head = repo.commit({"page.html": "<p>hi</p>\n"})
     before = analyse(api, head)
     assert before["skipped"] == [{"path": "page.html", "reason": "UNSUPPORTED_FILE_TYPE"}]
 
     data = json.loads(RULES.read_text())
-    data["unsupported"].remove(".html")
+    data["supported_extensions"].append(".html")
     edited = tmp_path / "rules.json"
     edited.write_text(json.dumps(data))
     monkeypatch.setenv("DRIFTER_RULES_FILE", str(edited))
@@ -141,18 +114,19 @@ def test_the_denylist_lives_in_the_rules_file(api, make_repo, tmp_path, monkeypa
     assert after["config_version"] != before["config_version"]
 
 
-def test_file_skipped_by_type_is_never_downloaded(api, make_repo):
-    # removes the image from the remote, so any attempt to download it fails the analysis
+def test_no_file_is_ever_downloaded(api, make_repo):
+    # removes both new blobs from the remote, so any attempt to download one fails the analysis
     from repos import git
 
     repo = make_repo()
-    repo.commit({"seed": "0\n"})
+    repo.commit({"seed.txt": "0\n"})
     head = repo.commit({"big.png": PNG, "notes.md": "hi\n"})
-    blob = git("rev-parse", f"{head}:big.png", cwd=repo.bare)
-    loose = repo.bare / "objects" / blob[:2] / blob[2:]
-    assert loose.is_file(), "expected the pushed image as a loose object"
-    loose.chmod(0o644)  # git writes objects read-only, which Windows won't delete
-    loose.unlink()
+    for name in ("big.png", "notes.md"):
+        blob = git("rev-parse", f"{head}:{name}", cwd=repo.bare)
+        loose = repo.bare / "objects" / blob[:2] / blob[2:]
+        assert loose.is_file(), f"expected {name} as a loose object"
+        loose.chmod(0o644)  # git writes objects read-only, which Windows won't delete
+        loose.unlink()
     body = analyse(api, head)
-    assert reason_for(body, "big.png") == "UNSUPPORTED_FILE_TYPE"
+    assert body["skipped"] == [{"path": "big.png", "reason": "UNSUPPORTED_FILE_TYPE"}]
     assert paths(body["changes"]) == ["big.png", "notes.md"]
