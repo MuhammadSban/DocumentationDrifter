@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import Callable
+from pathlib import Path
 from typing import NamedTuple
 
 import httpx
@@ -11,9 +13,13 @@ import httpx
 # gives each target call the per-call limit chosen in TT-Q5
 CALL_TIMEOUT = 90.0
 
+# reads the change tests' expected answers from one file, so it can be handed to Team 16 as it is
+EXPECTED = json.loads((Path(__file__).parent / "expected_changes.json").read_text(encoding="utf-8"))
+# lists T-01 to T-07 in order, each with its tag, commit, base and expected answer, or why it is skipped
+CHANGE_CASES = EXPECTED["tests"]
 # names the pod's fixture repo and the commit the saved-result tests analyse, c1-impl-only (TT-Q8)
-FIXTURE_REPO = "ParthGupta06/doc-tracker-fixtures"
-FIXTURE_COMMIT = "add930c827b4f242d173fe6d26ebc068c8dd65fb"
+FIXTURE_REPO = EXPECTED["repository"]
+FIXTURE_COMMIT = next(c["commit"] for c in CHANGE_CASES if c.get("tag") == "c1-impl-only")
 # names a repository and a commit no system can find, for T-12 and T-13
 MISSING_REPO = "ParthGupta06/no-such-repository"
 MISSING_COMMIT = "deadbeef" * 5
@@ -40,7 +46,7 @@ class TargetError(Exception):
 
 
 class Result(NamedTuple):
-    # judges one test: pass, fail or error, what was expected and what came back, and an error's source
+    # judges one test: pass, fail, error or skip, what was expected and what came back, and an error's source
     outcome: str
     message: str
     source: str | None = None
@@ -222,9 +228,9 @@ def _schema_problem(body: dict) -> str | None:
     return ", ".join(wrong) + " has the wrong type" if wrong else None
 
 
-def _saved_run(http: httpx.Client, target_url: str) -> tuple[dict | None, Result | None]:
-    # analyses the fixture commit, returns the schema-valid result or the judgement when it isn't one
-    r = _analyze(http, target_url, {"repository": FIXTURE_REPO, "commit_id": FIXTURE_COMMIT})
+def _saved_run(http: httpx.Client, target_url: str, commit: str = FIXTURE_COMMIT) -> tuple[dict | None, Result | None]:
+    # analyses a fixture commit, returns the schema-valid result or the judgement when it isn't one
+    r = _analyze(http, target_url, {"repository": FIXTURE_REPO, "commit_id": commit})
     body = _body(r)
     if r.status_code != 200 or not isinstance(body, dict):
         return None, _unexpected(r, "200 with a saved result")
@@ -298,8 +304,69 @@ def t17(http: httpx.Client, target_url: str) -> Result:
     return Result("pass", f"five runs agree on every field but {apart}")
 
 
+class ChangeKey(NamedTuple):
+    # holds what TT-Q9 compares of one change
+    path: str | None
+    old_path: str | None
+    change_type: str | None
+    category: str | None
+
+    @classmethod
+    def of(cls, c: dict) -> ChangeKey:
+        # reads the compared fields of a change
+        return cls(c.get("path"), c.get("old_path"), c.get("change_type"), c.get("category"))
+
+    def __str__(self) -> str:
+        # words a change the way a person reads it, a rename as old -> new
+        path = f"{self.old_path} -> {self.path}" if self.old_path else self.path
+        return f"{path} {self.change_type} {self.category}"
+
+
+def _skips(skipped: list[dict]) -> set[tuple[str, str]]:
+    # reduces skipped files to (path, reason) pairs
+    return {(s["path"], s["reason"]) for s in skipped}
+
+
+def _show(items: set) -> str:
+    # words a set for a message, sorted, as {a, b}
+    return "{" + ", ".join(sorted(str(i) if isinstance(i, ChangeKey) else " ".join(i) for i in items)) + "}"
+
+
+def change_test(case: dict) -> Callable[[httpx.Client, str], Result]:
+    # builds one change test from its entry in the data file, a skip when the entry says why it can't run yet
+    if "skip" in case:
+        return lambda http, target_url: Result("skip", case["skip"])
+
+    def check(http: httpx.Client, target_url: str) -> Result:
+        # compares changes[] as an unordered set, then skipped[] and a root commit's base when the case names them
+        got, failed = _saved_run(http, target_url, case["commit"])
+        if failed:
+            return failed
+        problems = []
+        expected = {ChangeKey.of(c) for c in case["changes"]}
+        received = {ChangeKey.of(c) for c in got["changes"]}
+        if received != expected:
+            problems.append(f"expected changes {_show(expected)}, got {_show(received)}")
+        if "skipped" in case:
+            want, have = _skips(case["skipped"]), _skips(got["skipped"])
+            if have != want:
+                problems.append(f"expected skipped {_show(want)}, got {_show(have)}")
+        if case["base_commit"] is None:
+            if got["base_commit"] is not None:
+                problems.append(f"expected base_commit null for a root commit, got {got['base_commit']}")
+            if any(c["change_type"] != "ADDED" for c in got["changes"]):
+                problems.append("expected every change of a root commit to be ADDED")
+        if problems:
+            return Result("fail", f"{case['tag']}: " + "; ".join(problems))
+        also = f" and skipped {_show(_skips(case['skipped']))}" if "skipped" in case else ""
+        return Result("pass", f"{case['tag']}: got the expected changes {_show(expected)}{also}")
+
+    return check
+
+
 # lists the shared tests in the order they run, each judged by its function
 TESTS: list[tuple[str, Callable[[httpx.Client, str], Result]]] = [
+    *((case["test_id"], change_test(case)) for case in CHANGE_CASES),
     ("T-08", t08),
     ("T-09", t09),
     ("T-10", t10),

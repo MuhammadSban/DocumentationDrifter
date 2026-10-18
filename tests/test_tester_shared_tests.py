@@ -1,10 +1,8 @@
 # covers cross-team tester ticket 02: T-08 to T-17, against the in-process /system and a stub that breaks one rule at a time
 
-import json
-
 import httpx
 import pytest
-from tester_stub import CHANGE, STUB, analysis, healthy, results, rewrite, run, setup
+from tester_stub import CHANGE, analysis, assert_outcome, healthy, posted_json, results, rewrite, run, setup, suite_on_stub
 
 # lists the tests ticket 02 adds, in the order they run
 ORDER = [f"T-{n:02d}" for n in range(8, 18)]
@@ -18,29 +16,6 @@ ERRORS = {
     "T-12": (404, "REPOSITORY_NOT_FOUND"),
     "T-13": (404, "COMMIT_NOT_FOUND"),
 }
-
-
-def suite_on_stub(api) -> dict[str, dict]:
-    # runs the suite on the stub as it now stands, returns the results by test id
-    sid = setup(api, STUB).json()["session_id"]
-    r = run(api, sid)
-    assert r.status_code == 200, r.text
-    return results(r.json())
-
-
-def assert_outcome(result: dict, outcome: str, source: str | None = None):
-    # checks a result's outcome, its source, and that its message isn't empty
-    assert result["outcome"] == outcome, result
-    assert result["message"]
-    assert result.get("source") == source
-
-
-def posted_json(request: httpx.Request):
-    # reads a request's JSON body, None for T-09's deliberately broken one
-    try:
-        return json.loads(request.content)
-    except ValueError:
-        return None
 
 
 # --- against our system ----------------------------------------------
@@ -74,7 +49,7 @@ def test_the_saved_result_tests_analyse_the_fixture_commit_by_full_sha(stub, api
     suite_on_stub(api)
     fixture = {"repository": suite.FIXTURE_REPO, "commit_id": suite.FIXTURE_COMMIT}
     analyses = [c for c in calls if c.url.path.endswith("/analyze") and posted_json(c) == fixture]
-    assert len(analyses) == 1 + 2 + 5  # counts T-14, T-16 and T-17
+    assert len(analyses) == 1 + 1 + 2 + 5  # counts T-01, T-14, T-16 and T-17
     assert len(suite.FIXTURE_COMMIT) == 40
 
 
@@ -196,7 +171,7 @@ def test_t16_fails_when_two_runs_share_an_id(stub, api):
     "field, make",
     [
         ("tool_version", lambda n: f"stub-{n}"),
-        ("changes", lambda n: [] if n == 4 else [CHANGE]),
+        ("changes", lambda n: [] if n % 2 else [CHANGE]),
         ("head_commit", lambda n: str(n) * 40),
     ],
 )

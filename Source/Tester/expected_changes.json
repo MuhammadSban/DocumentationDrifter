@@ -1,0 +1,84 @@
+{
+  "about": "Expected answers for the shared change tests T-01 to T-07 on the pod fixture repo, read from it on 2026-10-18. Categories follow the mapping-v1.1 order (TT-Q7 row 6); recheck them when mapping-v1.1.yaml is published.",
+  "repository": "ParthGupta06/doc-tracker-fixtures",
+  "tests": [
+    {
+      "test_id": "T-01",
+      "tag": "c1-impl-only",
+      "commit": "add930c827b4f242d173fe6d26ebc068c8dd65fb",
+      "base_commit": "d19092e138ea3f9788a8eac76005ee53d22940da",
+      "changes": [
+        {"path": "src/model.py", "old_path": null, "change_type": "MODIFIED", "category": "IMPLEMENTATION"}
+      ]
+    },
+    {
+      "test_id": "T-02",
+      "tag": "c2-add-mod-del",
+      "commit": "332e59e3ba2b1a6c1a454ee75c3a71dfea0b4ff6",
+      "base_commit": "add930c827b4f242d173fe6d26ebc068c8dd65fb",
+      "changes": [
+        {"path": "docs/model.md", "old_path": null, "change_type": "MODIFIED", "category": "DOCUMENTATION"},
+        {"path": "src/eval.py", "old_path": null, "change_type": "ADDED", "category": "IMPLEMENTATION"},
+        {"path": "src/train.py", "old_path": null, "change_type": "DELETED", "category": "IMPLEMENTATION"}
+      ]
+    },
+    {
+      "test_id": "T-03",
+      "tag": "c3-rename",
+      "commit": "9b03117ff9c5bfcaeb49eedfccd04aa07547ed49",
+      "base_commit": "332e59e3ba2b1a6c1a454ee75c3a71dfea0b4ff6",
+      "changes": [
+        {"path": "src/evaluate.py", "old_path": "src/eval.py", "change_type": "RENAMED", "category": "IMPLEMENTATION"}
+      ]
+    },
+    {
+      "test_id": "T-04",
+      "tag": "c4-categories",
+      "commit": "55e4b15ba4ce0a9e0923bffe1335c013b7c6ae07",
+      "base_commit": "9b03117ff9c5bfcaeb49eedfccd04aa07547ed49",
+      "changes": [
+        {"path": "docs/architecture/overview.md", "old_path": null, "change_type": "MODIFIED", "category": "ARCHITECTURE"},
+        {"path": "docs/design/decisions.md", "old_path": null, "change_type": "MODIFIED", "category": "DESIGN"},
+        {"path": "requirements/REQUIREMENTS.md", "old_path": null, "change_type": "MODIFIED", "category": "REQUIREMENT"},
+        {"path": "specs/api.yaml", "old_path": null, "change_type": "MODIFIED", "category": "SPECIFICATION"}
+      ]
+    },
+    {
+      "test_id": "T-05",
+      "tag": "c6-binary",
+      "commit": "8adab1b196fab4a522459716d96f2942665b222c",
+      "base_commit": "807e7bbc587d8a04731a850546e6acdb175a4392",
+      "changes": [
+        {"path": "assets/logo.png", "old_path": null, "change_type": "MODIFIED", "category": "OTHER"},
+        {"path": "data/weights.bin", "old_path": null, "change_type": "ADDED", "category": "OTHER"}
+      ],
+      "skipped": [
+        {"path": "assets/logo.png", "reason": "UNSUPPORTED_FILE_TYPE"},
+        {"path": "data/weights.bin", "reason": "UNSUPPORTED_FILE_TYPE"}
+      ]
+    },
+    {
+      "test_id": "T-06",
+      "skip": "Waiting on Team 16 to confirm which base_commit and head their tester uses for the explicit-base test (ticket 03, needs-info)"
+    },
+    {
+      "test_id": "T-07",
+      "tag": "c0-initial",
+      "commit": "d19092e138ea3f9788a8eac76005ee53d22940da",
+      "base_commit": null,
+      "changes": [
+        {"path": "LICENSE", "old_path": null, "change_type": "ADDED", "category": "OTHER"},
+        {"path": "README.md", "old_path": null, "change_type": "ADDED", "category": "DOCUMENTATION"},
+        {"path": "assets/logo.png", "old_path": null, "change_type": "ADDED", "category": "OTHER"},
+        {"path": "docs/architecture/overview.md", "old_path": null, "change_type": "ADDED", "category": "ARCHITECTURE"},
+        {"path": "docs/design/decisions.md", "old_path": null, "change_type": "ADDED", "category": "DESIGN"},
+        {"path": "docs/model.md", "old_path": null, "change_type": "ADDED", "category": "DOCUMENTATION"},
+        {"path": "docs/training.md", "old_path": null, "change_type": "ADDED", "category": "DOCUMENTATION"},
+        {"path": "requirements/REQUIREMENTS.md", "old_path": null, "change_type": "ADDED", "category": "REQUIREMENT"},
+        {"path": "specs/api.yaml", "old_path": null, "change_type": "ADDED", "category": "SPECIFICATION"},
+        {"path": "src/model.py", "old_path": null, "change_type": "ADDED", "category": "IMPLEMENTATION"},
+        {"path": "src/train.py", "old_path": null, "change_type": "ADDED", "category": "IMPLEMENTATION"}
+      ]
+    }
+  ]
+}

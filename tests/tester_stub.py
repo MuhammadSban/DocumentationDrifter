@@ -33,6 +33,29 @@ def results(body: dict) -> dict[str, dict]:
     return {r["test_id"]: r for r in body["results"]}
 
 
+def suite_on_stub(api) -> dict[str, dict]:
+    # runs the suite on the stub as it now stands, returns the results by test id
+    sid = setup(api, STUB).json()["session_id"]
+    r = run(api, sid)
+    assert r.status_code == 200, r.text
+    return results(r.json())
+
+
+def assert_outcome(result: dict, outcome: str, source: str | None = None):
+    # checks a result's outcome, its source, and that its message isn't empty
+    assert result["outcome"] == outcome, result
+    assert result["message"]
+    assert result.get("source") == source
+
+
+def posted_json(request: httpx.Request):
+    # reads a request's JSON body, None for T-09's deliberately broken one
+    try:
+        return json.loads(request.content)
+    except ValueError:
+        return None
+
+
 def _error(status: int, code: str, message: str = "stub says no") -> httpx.Response:
     # answers with the contract's ErrorBody
     return httpx.Response(status, json={"code": code, "message": message})
@@ -42,20 +65,38 @@ def _error(status: int, code: str, message: str = "stub says no") -> httpx.Respo
 CHANGE = {"path": "src/model.py", "old_path": None, "change_type": "MODIFIED", "category": "IMPLEMENTATION"}
 
 
+def _find_case(key: str, value: str) -> dict | None:
+    # finds the change test whose key holds value in the tester's data file
+    from Tester import suite
+
+    return next((case for case in suite.CHANGE_CASES if case.get(key) == value), None)
+
+
+def expected_case(commit: str) -> dict | None:
+    # finds the change test for a fixture commit
+    return _find_case("commit", commit)
+
+
+def case_for(test_id: str) -> dict:
+    # finds a change test by its id
+    return _find_case("test_id", test_id)
+
+
 def analysis(request_body: dict) -> dict:
-    # builds a result shaped like the contract's, the same apart from analysis_id and created_at
+    # builds a result shaped like the contract's, a fixture commit answering as the data file expects
+    case = expected_case(request_body["commit_id"]) or {}
     return {
         "analysis_id": f"an-{uuid.uuid4().hex}",
         "repository": request_body["repository"],
         "head_commit": request_body["commit_id"],
-        "base_commit": None,
+        "base_commit": case.get("base_commit"),
         "config_version": "stub",
         "tool_version": "stub-1",
         "status": "SUCCESS",
         "error": None,
         "issues": [],
-        "changes": [CHANGE],
-        "skipped": [],
+        "changes": case.get("changes", [CHANGE]),
+        "skipped": case.get("skipped", []),
         "created_at": f"2026-10-18T00:00:{uuid.uuid4().int % 60:02d}.000Z",
     }
 
@@ -76,7 +117,7 @@ def healthy(routes) -> dict:
             return _error(400, "INVALID_REQUEST")
         if repo != suite.FIXTURE_REPO:
             return _error(404, "REPOSITORY_NOT_FOUND")
-        if commit != suite.FIXTURE_COMMIT:
+        if expected_case(commit) is None:
             return _error(404, "COMMIT_NOT_FOUND")
         result = analysis(body)
         saved[result["analysis_id"]] = result
