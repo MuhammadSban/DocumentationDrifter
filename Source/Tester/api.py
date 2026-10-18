@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
+from starlette.exceptions import HTTPException
 
 from Tester import suite
 
@@ -23,8 +24,8 @@ app = FastAPI(
 
 
 class TesterSetupRequest(BaseModel):
-    # names the system to test, the URL its /test, /analyze and /analysis routes hang off
-    target_url: str = Field(pattern=r"^https?://\S+$")
+    # names the system to test, the URL its /test, /analyze and /analysis routes hang off, no query or fragment
+    target_url: str = Field(pattern=r"^https?://[^\s?#]+$")
 
 
 class TesterRunRequest(BaseModel):
@@ -41,13 +42,13 @@ def _describe(error: dict) -> str:
     # words the first validation error the way a caller can act on
     loc = [part for part in error.get("loc", ()) if part != "body"]
     kind = error.get("type", "")
-    if not loc:
+    if not loc or kind == "json_invalid":
         return "body is required" if kind == "missing" else "body must be a JSON object"
     field = loc[0]
     if kind == "missing":
         return f"{field} is required"
     if kind == "string_pattern_mismatch":
-        return f"{field} must be an http or https URL"
+        return f"{field} must be an http or https URL without a query or fragment"
     return f"{field} has the wrong type"
 
 
@@ -55,6 +56,12 @@ def _describe(error: dict) -> str:
 def _bad_request(_: Request, exc: RequestValidationError) -> JSONResponse:
     # answers validation failures as 400, never 422
     return tester_error(400, _describe(exc.errors()[0]))
+
+
+@app.exception_handler(HTTPException)
+def _http_error(_: Request, exc: HTTPException) -> JSONResponse:
+    # answers an unknown route or method in the tester's error body, not FastAPI's {"detail"}
+    return tester_error(exc.status_code, str(exc.detail))
 
 
 @dataclass
@@ -132,8 +139,9 @@ def test_report(session_id: str | None = None):
     return _json(session.report)
 
 
+@app.get("/", include_in_schema=False)
 def index() -> dict:
-    # lists the routes for a person who opens plain /tester, kept out of the OpenAPI document
+    # lists the routes for a person who opens /tester/, the main app serves plain /tester with it too
     return {
         "service": "DocumentationDrifter tester",
         "routes": [
