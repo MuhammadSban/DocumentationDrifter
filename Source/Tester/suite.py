@@ -30,11 +30,9 @@ LISTED_500 = frozenset({"TIMEOUT", "WRITE_FAILED"})
 # lists the error sources the tester answers with, a target's other values become unknown
 SOURCES = frozenset({"tester", "system", "communication", "unknown"})
 
-# words the coverage kinds ticket 04 will count, null until the tests carry their tags
-NOT_COUNTED = {
-    "component": "Not counted yet: the shared tests don't carry their component tags (C1 to C7)",
-    "system": "Not counted yet: the shared tests don't carry their acceptance-criteria tags (AC-01 to AC-10)",
-}
+# lists the pod's components and acceptance criteria, each covered once an executed test exercises it (TT-Q3)
+COMPONENTS = tuple(f"C{n}" for n in range(1, 8))
+CRITERIA = tuple(f"AC-{n:02d}" for n in range(1, 11))
 
 
 class TargetError(Exception):
@@ -364,29 +362,37 @@ def change_test(case: dict) -> Callable[[httpx.Client, str], Result]:
     return check
 
 
-# lists the shared tests in the order they run, each judged by its function
-TESTS: list[tuple[str, Callable[[httpx.Client, str], Result]]] = [
-    *((case["test_id"], change_test(case)) for case in CHANGE_CASES),
-    ("T-08", t08),
-    ("T-09", t09),
-    ("T-10", t10),
-    ("T-11", t11),
-    ("T-12", t12),
-    ("T-13", t13),
-    ("T-14", t14),
-    ("T-15", t15),
-    ("T-16", t16),
-    ("T-17", t17),
+class SharedTest(NamedTuple):
+    # defines one shared test: its id, its judge, and the components and criteria it exercises
+    test_id: str
+    check: Callable[[httpx.Client, str], Result]
+    components: list[str]
+    criteria: list[str]
+
+
+# lists the shared tests in the order they run, the change tests' tags come from the data file
+TESTS: list[SharedTest] = [
+    *(SharedTest(c["test_id"], change_test(c), c["components"], c["criteria"]) for c in CHANGE_CASES),
+    SharedTest("T-08", t08, ["C1"], ["AC-07"]),
+    SharedTest("T-09", t09, ["C1"], ["AC-07"]),
+    SharedTest("T-10", t10, ["C1"], ["AC-07"]),
+    SharedTest("T-11", t11, ["C1"], ["AC-07"]),
+    SharedTest("T-12", t12, ["C1", "C2"], ["AC-08"]),
+    SharedTest("T-13", t13, ["C1", "C2"], ["AC-08"]),
+    SharedTest("T-14", t14, ["C1", "C2", "C3", "C5", "C6"], ["AC-06"]),
+    SharedTest("T-15", t15, ["C1", "C6"], ["AC-06"]),
+    SharedTest("T-16", t16, ["C1", "C2", "C3", "C5", "C6"], ["AC-06"]),
+    SharedTest("T-17", t17, ["C1", "C2", "C3", "C5"], ["AC-10"]),
 ]
 
 
-def _run_one(http: httpx.Client, target_url: str, test_id: str, check: Callable[[httpx.Client, str], Result]) -> dict:
+def _run_one(http: httpx.Client, target_url: str, test: SharedTest) -> dict:
     # runs one test, a call with no answer is an error from communication
     try:
-        result = check(http, target_url)
+        result = test.check(http, target_url)
     except httpx.TransportError as exc:
         result = Result("error", f"the target gave no answer: {exc}", "communication")
-    found = {"test_id": test_id, "outcome": result.outcome, "message": result.message}
+    found = {"test_id": test.test_id, "outcome": result.outcome, "message": result.message}
     if result.source is not None:
         found["source"] = result.source
     return found
@@ -417,14 +423,32 @@ def code_coverage(http: httpx.Client, target_url: str, session_id: str) -> dict:
     return code
 
 
+def _counted(listed: tuple[str, ...], covered: set[str], what: str) -> dict:
+    # reports how many of a pod list the executed tests exercised, naming them in Team 16's wording
+    found = [i for i in listed if i in covered]
+    names = ", ".join(found) or "none"
+    basis = f"{what} {listed[0]}-{listed[-1]} listed in the pod specification exercised by at least one executed test: {names}"
+    return {"covered": len(found), "total": len(listed), "basis": basis}
+
+
+def tag_coverage(results: list[dict]) -> dict:
+    # counts component and system coverage from the tags of every test that ran, a skipped test covers nothing
+    ran = {r["test_id"] for r in results if r["outcome"] != "skip"}
+    executed = [t for t in TESTS if t.test_id in ran]
+    return {
+        "component": _counted(COMPONENTS, {c for t in executed for c in t.components}, "Components"),
+        "system": _counted(CRITERIA, {c for t in executed for c in t.criteria}, "Acceptance criteria"),
+    }
+
+
 def run(session_id: str, target_url: str) -> dict:
     # runs every shared test once, then reads the target's report, in the suite report's field order
     with client() as http:
-        results = [_run_one(http, target_url, test_id, check) for test_id, check in TESTS]
+        results = [_run_one(http, target_url, test) for test in TESTS]
         code = code_coverage(http, target_url, session_id)
     return {
         "session_id": session_id,
         "target_url": target_url,
         "results": results,
-        "coverage": {"code": code, **{kind: _uncounted(basis) for kind, basis in NOT_COUNTED.items()}},
+        "coverage": {"code": code, **tag_coverage(results)},
     }

@@ -4,6 +4,8 @@
   "tests": [
     {
       "test_id": "T-01",
+      "components": ["C1", "C2", "C3", "C5"],
+      "criteria": ["AC-01"],
       "tag": "c1-impl-only",
       "commit": "add930c827b4f242d173fe6d26ebc068c8dd65fb",
       "base_commit": "d19092e138ea3f9788a8eac76005ee53d22940da",
@@ -13,6 +15,8 @@
     },
     {
       "test_id": "T-02",
+      "components": ["C1", "C2", "C3", "C5"],
+      "criteria": ["AC-01"],
       "tag": "c2-add-mod-del",
       "commit": "332e59e3ba2b1a6c1a454ee75c3a71dfea0b4ff6",
       "base_commit": "add930c827b4f242d173fe6d26ebc068c8dd65fb",
@@ -24,6 +28,8 @@
     },
     {
       "test_id": "T-03",
+      "components": ["C1", "C2", "C3", "C5"],
+      "criteria": ["AC-01"],
       "tag": "c3-rename",
       "commit": "9b03117ff9c5bfcaeb49eedfccd04aa07547ed49",
       "base_commit": "332e59e3ba2b1a6c1a454ee75c3a71dfea0b4ff6",
@@ -33,6 +39,8 @@
     },
     {
       "test_id": "T-04",
+      "components": ["C1", "C2", "C3", "C5"],
+      "criteria": ["AC-01"],
       "tag": "c4-categories",
       "commit": "55e4b15ba4ce0a9e0923bffe1335c013b7c6ae07",
       "base_commit": "9b03117ff9c5bfcaeb49eedfccd04aa07547ed49",
@@ -45,6 +53,8 @@
     },
     {
       "test_id": "T-05",
+      "components": ["C1", "C2", "C3", "C5"],
+      "criteria": ["AC-01"],
       "tag": "c6-binary",
       "commit": "8adab1b196fab4a522459716d96f2942665b222c",
       "base_commit": "807e7bbc587d8a04731a850546e6acdb175a4392",
@@ -59,10 +69,14 @@
     },
     {
       "test_id": "T-06",
+      "components": ["C1", "C2", "C3", "C5"],
+      "criteria": ["AC-01"],
       "skip": "Waiting on Team 16 to confirm which base_commit and head their tester uses for the explicit-base test (ticket 03, needs-info)"
     },
     {
       "test_id": "T-07",
+      "components": ["C1", "C2", "C3", "C5"],
+      "criteria": ["AC-01"],
       "tag": "c0-initial",
       "commit": "d19092e138ea3f9788a8eac76005ee53d22940da",
       "base_commit": null,

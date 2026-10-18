@@ -125,13 +125,6 @@ def test_a_run_against_our_system_passes_t15_and_copies_code_coverage(tester):
     assert isinstance(code["covered"], int) and 0 < code["covered"] <= code["total"] and "GitHub_Connector" in code["basis"]
 
 
-def test_component_and_system_coverage_are_null_with_a_reason(tester):
-    sid = setup(tester).json()["session_id"]
-    coverage = run(tester, sid).json()["coverage"]
-    for name in ("component", "system"):
-        assert coverage[name]["covered"] is None and coverage[name]["total"] is None and coverage[name]["basis"]
-
-
 @pytest.mark.parametrize(
     "answer, outcome, source",
     [
