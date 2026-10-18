@@ -5,69 +5,7 @@ import uuid
 
 import httpx
 import pytest
-from fastapi.testclient import TestClient
-
-SYSTEM = "http://testserver/system"
-STUB = "http://stub.test/system"
-
-
-@pytest.fixture
-def tester(api, monkeypatch):
-    # points the tester's target calls at the in-process app, still over HTTP
-    from GitHub_Connector.api import app
-    from Tester import suite
-
-    monkeypatch.setattr(suite, "client", lambda: TestClient(app))
-    return api
-
-
-@pytest.fixture
-def stub(api, monkeypatch):
-    # points the tester's target calls at a stub target, returns the dict of handlers to fill and the calls seen
-    from Tester import suite
-
-    routes: dict[tuple[str, str], object] = {}
-    calls: list[httpx.Request] = []
-
-    def handle(request: httpx.Request) -> httpx.Response:
-        calls.append(request)
-        path = request.url.path.removeprefix("/system")
-        key = (request.method, "/analysis/*" if path.startswith("/analysis/") else path)
-        answer = routes.get(key)
-        if answer is None:
-            return httpx.Response(404, json={"message": "no stub route", "source": "system"})
-        return answer(request) if callable(answer) else answer
-
-    monkeypatch.setattr(suite, "client", lambda: httpx.Client(transport=httpx.MockTransport(handle)))
-    return routes, calls
-
-
-def healthy(routes):
-    # fills a stub with a target that behaves like a correct system
-    routes[("POST", "/test/setup")] = lambda r: httpx.Response(201, json={"session_id": json.loads(r.content)["session_id"]})
-    routes[("GET", "/analysis/*")] = httpx.Response(404, json={"code": "ANALYSIS_NOT_FOUND", "message": "gone"})
-    code = {"covered": 3, "total": 10, "basis": "stub lines"}
-    routes[("GET", "/test/report")] = lambda r: httpx.Response(
-        200, json={"session_id": r.url.params["session_id"], "coverage": {"code": code}}
-    )
-
-
-def setup(api, target_url=SYSTEM):
-    # opens a tester session against target_url
-    return api.post("/tester/test/setup", json={"target_url": target_url})
-
-
-def run(api, session_id):
-    # runs the suite on an open session
-    return api.post("/tester/test/run", json={"session_id": session_id})
-
-
-def assert_error(r, status, source):
-    # checks the tester's error body, a non-empty message and the given source
-    assert r.status_code == status, r.text
-    body = r.json()
-    assert set(body) == {"message", "source"} and body["message"] and body["source"] == source
-
+from tester_stub import STUB, SYSTEM, assert_error, healthy, results, run, setup
 
 # --- routes and documents --------------------------------------------
 
@@ -178,8 +116,10 @@ def test_a_run_against_our_system_passes_t15_and_copies_code_coverage(tester):
     body = r.json()
     assert list(body) == ["session_id", "target_url", "results", "coverage"]
     assert body["session_id"] == sid and body["target_url"] == SYSTEM
-    assert [x["test_id"] for x in body["results"]] == ["T-15"]
-    t15 = body["results"][0]
+    ids = [x["test_id"] for x in body["results"]]
+    assert all(ids) and len(set(ids)) == len(ids) and "T-15" in ids
+    assert all(x["message"] for x in body["results"])
+    t15 = results(body)["T-15"]
     assert t15["outcome"] == "pass" and t15["message"] and "source" not in t15
     code = body["coverage"]["code"]
     assert isinstance(code["covered"], int) and 0 < code["covered"] <= code["total"] and "GitHub_Connector" in code["basis"]
@@ -207,7 +147,7 @@ def test_t15_is_judged_on_status_and_code(stub, api, answer, outcome, source):
     healthy(routes)
     routes[("GET", "/analysis/*")] = answer
     sid = setup(api, STUB).json()["session_id"]
-    t15 = run(api, sid).json()["results"][0]
+    t15 = results(run(api, sid).json())["T-15"]
     assert t15["outcome"] == outcome and t15["message"]
     assert t15.get("source") == source
 
@@ -221,7 +161,7 @@ def test_t15_with_no_response_is_a_communication_error(stub, api):
 
     routes[("GET", "/analysis/*")] = hang
     sid = setup(api, STUB).json()["session_id"]
-    t15 = run(api, sid).json()["results"][0]
+    t15 = results(run(api, sid).json())["T-15"]
     assert t15["outcome"] == "error" and t15["source"] == "communication"
 
 

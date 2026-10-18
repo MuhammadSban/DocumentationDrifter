@@ -241,6 +241,54 @@ def target(api):
         yield client
 
 
+@pytest.fixture
+def tester(api, pod_fixtures, monkeypatch):
+    # points the tester's target calls at the in-process app, still over HTTP, with the fixture repo served locally
+    from fastapi.testclient import TestClient
+
+    from GitHub_Connector.api import app
+    from Tester import suite
+
+    monkeypatch.setattr(suite, "client", lambda: TestClient(app))
+    return api
+
+
+@pytest.fixture
+def stub(api, monkeypatch):
+    # points the tester's target calls at a stub target, returns the dict of handlers to fill and the calls seen
+    import httpx
+
+    from Tester import suite
+
+    routes: dict[tuple[str, str], object] = {}
+    calls: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        path = request.url.path.removeprefix("/system")
+        key = (request.method, "/analysis/*" if path.startswith("/analysis/") else path)
+        answer = routes.get(key)
+        if answer is None:
+            return httpx.Response(404, json={"message": "no stub route", "source": "system"})
+        return answer(request) if callable(answer) else answer
+
+    monkeypatch.setattr(suite, "client", lambda: httpx.Client(transport=httpx.MockTransport(handle)))
+    return routes, calls
+
+
+@pytest.fixture
+def pod_fixtures(v1_env):
+    # serves a local copy of the pod's fixture repo, the same SHAs as on GitHub, so the shared tests run offline
+    import subprocess
+
+    from Tester import suite
+
+    bare = v1_env["remotes"] / f"{suite.FIXTURE_REPO}.git"
+    bundle = Path(__file__).parent / "data" / "doc-tracker-fixtures.bundle"
+    subprocess.run(["git", "clone", "--quiet", "--bare", str(bundle), str(bare)], check=True, capture_output=True)
+    return bare
+
+
 # --- test repo -------------------------------------------------------
 
 LOCAL_TESTREPO = "fixtures/drifter-testrepo"

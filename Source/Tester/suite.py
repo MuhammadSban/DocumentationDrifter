@@ -11,6 +11,16 @@ import httpx
 # gives each target call the per-call limit chosen in TT-Q5
 CALL_TIMEOUT = 90.0
 
+# names the pod's fixture repo and the commit the saved-result tests analyse, c1-impl-only (TT-Q8)
+FIXTURE_REPO = "ParthGupta06/doc-tracker-fixtures"
+FIXTURE_COMMIT = "add930c827b4f242d173fe6d26ebc068c8dd65fb"
+# names a repository and a commit no system can find, for T-12 and T-13
+MISSING_REPO = "ParthGupta06/no-such-repository"
+MISSING_COMMIT = "deadbeef" * 5
+
+# lists the pod contract's 500 error codes, any other 5xx is the system's own failure (TT-Q9), LLM_UNAVAILABLE is ours alone
+LISTED_500 = frozenset({"TIMEOUT", "WRITE_FAILED"})
+
 # lists the error sources the tester answers with, a target's other values become unknown
 SOURCES = frozenset({"tester", "system", "communication", "unknown"})
 
@@ -71,15 +81,65 @@ def setup_target(target_url: str, session_id: str) -> None:
 # --- the shared test list --------------------------------------------
 
 
-def expect_error(r: httpx.Response, status: int, code: str) -> Result:
-    # judges an error test on status and code alone, never the message's wording (TT-Q9)
-    if r.status_code >= 500 and status < 500:
-        return Result("error", f"expected {status} {code}, the target failed with {r.status_code}", "system")
+def _unexpected(r: httpx.Response, expected: str) -> Result:
+    # judges an answer other than the expected one, an unlisted 5xx is the system's error and anything else a fail
     body = _body(r)
-    got = body.get("code") if isinstance(body, dict) else None
-    if r.status_code == status and got == code:
-        return Result("pass", f"answered {status} {code}")
-    return Result("fail", f"expected {status} {code}, got {r.status_code} {got or 'without a code'}")
+    code = body.get("code") if isinstance(body, dict) else None
+    got = f"{r.status_code} {code or 'without a code'}"
+    if r.status_code >= 500 and not (r.status_code == 500 and code in LISTED_500):
+        return Result("error", f"expected {expected}, the target failed with {got}", "system")
+    return Result("fail", f"expected {expected}, got {got}")
+
+
+def expect_error(r: httpx.Response, status: int, code: str) -> Result:
+    # judges an error test on status, code and a non-empty message, never the message's wording (TT-Q9)
+    body = _body(r)
+    if r.status_code != status or not isinstance(body, dict) or body.get("code") != code:
+        return _unexpected(r, f"{status} {code}")
+    message = body.get("message")
+    if not isinstance(message, str) or not message.strip():
+        return Result("fail", f"expected {status} {code} with a message, got {status} {code} with an empty message")
+    return Result("pass", f"answered {status} {code}")
+
+
+def _analyze(http: httpx.Client, target_url: str, body: dict) -> httpx.Response:
+    # posts one analysis request as JSON
+    return http.post(f"{target_url}/analyze", json=body)
+
+
+def t08(http: httpx.Client, target_url: str) -> Result:
+    # leaves out commit_id
+    return expect_error(_analyze(http, target_url, {"repository": FIXTURE_REPO}), 400, "INVALID_REQUEST")
+
+
+def t09(http: httpx.Client, target_url: str) -> Result:
+    # sends a body that isn't valid JSON
+    r = http.post(f"{target_url}/analyze", content=b'{"repository": ', headers={"content-type": "application/json"})
+    return expect_error(r, 400, "INVALID_REQUEST")
+
+
+def t10(http: httpx.Client, target_url: str) -> Result:
+    # names a repository that isn't in owner/name form
+    r = _analyze(http, target_url, {"repository": "not-a-repo", "commit_id": FIXTURE_COMMIT})
+    return expect_error(r, 400, "INVALID_REQUEST")
+
+
+def t11(http: httpx.Client, target_url: str) -> Result:
+    # sends commit_id as a number
+    r = _analyze(http, target_url, {"repository": FIXTURE_REPO, "commit_id": 12345})
+    return expect_error(r, 400, "INVALID_REQUEST")
+
+
+def t12(http: httpx.Client, target_url: str) -> Result:
+    # names a repository that doesn't exist
+    r = _analyze(http, target_url, {"repository": MISSING_REPO, "commit_id": FIXTURE_COMMIT})
+    return expect_error(r, 404, "REPOSITORY_NOT_FOUND")
+
+
+def t13(http: httpx.Client, target_url: str) -> Result:
+    # names a commit the fixture repo doesn't have
+    r = _analyze(http, target_url, {"repository": FIXTURE_REPO, "commit_id": MISSING_COMMIT})
+    return expect_error(r, 404, "COMMIT_NOT_FOUND")
 
 
 def t15(http: httpx.Client, target_url: str) -> Result:
@@ -88,9 +148,168 @@ def t15(http: httpx.Client, target_url: str) -> Result:
     return expect_error(r, 404, "ANALYSIS_NOT_FOUND")
 
 
+# lists the shared contract's enums, DOCUMENTATION included (TT-Q7 row 6)
+CHANGE_TYPES = frozenset({"ADDED", "MODIFIED", "DELETED", "RENAMED", "COPIED", "TYPE_CHANGED"})
+CATEGORIES = frozenset({"IMPLEMENTATION", "DESIGN", "ARCHITECTURE", "SPECIFICATION", "REQUIREMENT", "DOCUMENTATION", "OTHER"})
+FINDING_FIELDS = frozenset(
+    {"finding_id", "issue_type", "code_file", "documentation_file", "change_category", "explanation", "verification_status"}
+)
+
+
+def _str(value) -> bool:
+    # accepts a string
+    return isinstance(value, str)
+
+
+def _str_or_none(value) -> bool:
+    # accepts a string or null
+    return value is None or isinstance(value, str)
+
+
+def _list_of(check: Callable[[object], bool]) -> Callable[[object], bool]:
+    # accepts a list whose every item passes check
+    return lambda value: isinstance(value, list) and all(check(item) for item in value)
+
+
+def _change(c) -> bool:
+    # accepts one change: path, an optional old_path, and a change type and category from the enums
+    return (
+        isinstance(c, dict) and _str(c.get("path")) and _str_or_none(c.get("old_path"))
+        and c.get("change_type") in CHANGE_TYPES and c.get("category") in CATEGORIES
+    )
+
+
+def _skip(s) -> bool:
+    # accepts one skipped file: its path and a reason
+    return isinstance(s, dict) and _str(s.get("path")) and _str(s.get("reason"))
+
+
+def _finding(f) -> bool:
+    # accepts one finding with every field, its category from the enum
+    return isinstance(f, dict) and FINDING_FIELDS <= set(f) and f["change_category"] in CATEGORIES
+
+
+def _error_body(e) -> bool:
+    # accepts null or an ErrorBody
+    return e is None or (isinstance(e, dict) and _str(e.get("code")) and _str(e.get("message")))
+
+
+# checks each field of the contract's AnalysisResult, the saved-result tests hold every run to it
+RESULT_FIELDS = {
+    "analysis_id": _str,
+    "repository": _str,
+    "head_commit": _str,
+    "base_commit": _str_or_none,
+    "config_version": _str,
+    "tool_version": _str,
+    "status": lambda v: v in ("SUCCESS", "ERROR"),
+    "error": _error_body,
+    "issues": _list_of(_finding),
+    "changes": _list_of(_change),
+    "skipped": _list_of(_skip),
+    "created_at": _str,
+}
+# leaves out the fields that differ between identical runs (Phase 2 §5.1)
+PER_RUN = ("analysis_id", "created_at")
+
+
+def _schema_problem(body: dict) -> str | None:
+    # names what breaks the result schema, None when nothing does
+    missing = [f for f in RESULT_FIELDS if f not in body]
+    if missing:
+        return "missing " + ", ".join(missing)
+    wrong = [f for f, ok in RESULT_FIELDS.items() if not ok(body[f])]
+    return ", ".join(wrong) + " has the wrong type" if wrong else None
+
+
+def _saved_run(http: httpx.Client, target_url: str) -> tuple[dict | None, Result | None]:
+    # analyses the fixture commit, returns the schema-valid result or the judgement when it isn't one
+    r = _analyze(http, target_url, {"repository": FIXTURE_REPO, "commit_id": FIXTURE_COMMIT})
+    body = _body(r)
+    if r.status_code != 200 or not isinstance(body, dict):
+        return None, _unexpected(r, "200 with a saved result")
+    problem = _schema_problem(body)
+    if problem:
+        return None, Result("fail", f"expected a schema-valid result, got one that breaks the schema: {problem}")
+    return body, None
+
+
+def _saved_runs(http: httpx.Client, target_url: str, count: int) -> tuple[list[dict], Result | None]:
+    # analyses the fixture commit count times, stopping at the first run that isn't a schema-valid result
+    runs = []
+    for _ in range(count):
+        posted, failed = _saved_run(http, target_url)
+        if failed:
+            return runs, failed
+        runs.append(posted)
+    return runs, None
+
+
+def _differing(a: dict, b: dict) -> list[str]:
+    # lists the fields two bodies disagree on, sorted
+    return sorted(k for k in a.keys() | b.keys() if a.get(k) != b.get(k))
+
+
+def _served_back(http: httpx.Client, target_url: str, posted: dict) -> Result | None:
+    # reads a run back by its id, None when it equals the POST body
+    path = f"/analysis/{posted['analysis_id']}"
+    r = http.get(target_url + path)
+    if r.status_code != 200:
+        return _unexpected(r, f"200 for GET {path}")
+    served = _body(r)
+    if served != posted:
+        differ = _differing(posted, served) if isinstance(served, dict) else ["the whole body"]
+        return Result("fail", f"expected GET {path} to return the POST body, it differs in {', '.join(differ)}")
+    return None
+
+
+def t14(http: httpx.Client, target_url: str) -> Result:
+    # analyses once, then reads the run back
+    runs, failed = _saved_runs(http, target_url, 1)
+    if failed:
+        return failed
+    return _served_back(http, target_url, runs[0]) or Result("pass", "GET /analysis/{id} returned the POST body")
+
+
+def t16(http: httpx.Client, target_url: str) -> Result:
+    # analyses twice, expects two ids that each read back unchanged
+    runs, failed = _saved_runs(http, target_url, 2)
+    if failed:
+        return failed
+    if runs[0]["analysis_id"] == runs[1]["analysis_id"]:
+        return Result("fail", f"expected two different ids, got {runs[0]['analysis_id']} twice")
+    for posted in runs:
+        failed = _served_back(http, target_url, posted)
+        if failed:
+            return failed
+    return Result("pass", "two runs got two ids, both read back unchanged")
+
+
+def t17(http: httpx.Client, target_url: str) -> Result:
+    # analyses five times, expects schema-valid runs equal apart from id and time, tool_version included
+    runs, failed = _saved_runs(http, target_url, 5)
+    if failed:
+        return failed
+    kept = [{k: v for k, v in run.items() if k not in PER_RUN} for run in runs]
+    differ = sorted({field for run in kept[1:] for field in _differing(kept[0], run)})
+    apart = " and ".join(PER_RUN)
+    if differ:
+        return Result("fail", f"expected five runs equal apart from {apart}, they differ in {', '.join(differ)}")
+    return Result("pass", f"five runs agree on every field but {apart}")
+
+
 # lists the shared tests in the order they run, each judged by its function
 TESTS: list[tuple[str, Callable[[httpx.Client, str], Result]]] = [
+    ("T-08", t08),
+    ("T-09", t09),
+    ("T-10", t10),
+    ("T-11", t11),
+    ("T-12", t12),
+    ("T-13", t13),
+    ("T-14", t14),
     ("T-15", t15),
+    ("T-16", t16),
+    ("T-17", t17),
 ]
 
 
