@@ -72,9 +72,15 @@ def _find_case(key: str, value: str) -> dict | None:
     return next((case for case in suite.CHANGE_CASES if case.get(key) == value), None)
 
 
-def expected_case(commit: str) -> dict | None:
-    # finds the change test for a fixture commit
-    return _find_case("commit", commit)
+def expected_case(commit: str, base: str | None = None) -> dict | None:
+    # finds the change test for a head, and for a base when one is sent, T-02 and T-06 share a head
+    from Tester import suite
+
+    for case in suite.CHANGE_CASES:
+        explicit = case.get("explicit_base", False)
+        if case["commit"] == commit and explicit == (base is not None) and (base is None or case["base_commit"] == base):
+            return case
+    return None
 
 
 def case_for(test_id: str) -> dict:
@@ -84,7 +90,7 @@ def case_for(test_id: str) -> dict:
 
 def analysis(request_body: dict) -> dict:
     # builds a result shaped like the contract's, a fixture commit answering as the data file expects
-    case = expected_case(request_body["commit_id"]) or {}
+    case = expected_case(request_body["commit_id"], request_body.get("base_commit")) or {}
     return {
         "analysis_id": f"an-{uuid.uuid4().hex}",
         "repository": request_body["repository"],
@@ -117,7 +123,7 @@ def healthy(routes) -> dict:
             return _error(400, "INVALID_REQUEST")
         if repo != suite.FIXTURE_REPO:
             return _error(404, "REPOSITORY_NOT_FOUND")
-        if expected_case(commit) is None:
+        if expected_case(commit, body.get("base_commit")) is None:
             return _error(404, "COMMIT_NOT_FOUND")
         result = analysis(body)
         saved[result["analysis_id"]] = result

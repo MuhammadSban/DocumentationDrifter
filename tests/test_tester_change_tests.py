@@ -8,16 +8,16 @@ from tester_stub import assert_outcome, case_for, healthy, posted_json, results,
 
 # lists the tests ticket 03 adds, in the order they run
 ORDER = [f"T-{n:02d}" for n in range(1, 8)]
-RAN = [t for t in ORDER if t != "T-06"]
 
 
 def on_commit(test_id: str, transform):
-    # rewrites the stub's answer only for the commit test_id analyses
-    commit = case_for(test_id)["commit"]
+    # rewrites the stub's answer only for the head and base test_id analyses, T-02 and T-06 share a head
+    case = case_for(test_id)
 
     def maybe(body, n):
-        # rewrites one commit's body, every other body unchanged
-        return transform(body) if body["head_commit"] == commit else body
+        # rewrites one case's body, every other body unchanged
+        mine = body["head_commit"] == case["commit"] and body["base_commit"] == case["base_commit"]
+        return transform(body) if mine else body
 
     return maybe
 
@@ -30,34 +30,37 @@ def test_the_data_file_names_every_change_test_with_its_tag_and_full_sha():
 
     cases = {c["test_id"]: c for c in suite.CHANGE_CASES}
     assert list(cases) == ORDER
-    for test_id in RAN:
-        assert len(cases[test_id]["commit"]) == 40 and cases[test_id]["tag"]
-    assert cases["T-06"]["skip"]
+    for case in cases.values():
+        assert len(case["commit"]) == 40 and case["tag"]
+    assert cases["T-06"]["explicit_base"] and cases["T-06"]["base_tag"]
     assert suite.FIXTURE_COMMIT == cases["T-01"]["commit"]
 
 
 def test_the_data_file_matches_the_local_fixture_repo(pod_fixtures):
     from Tester import suite
 
+    def sha(rev: str) -> str:
+        # resolves a revision in the local fixture repo
+        return subprocess.run(["git", "rev-parse", rev], cwd=pod_fixtures, capture_output=True, text=True, check=True).stdout.strip()
+
     for case in suite.CHANGE_CASES:
-        if "tag" not in case:
-            continue
-        sha = subprocess.run(
-            ["git", "rev-parse", f"{case['tag']}^{{commit}}"], cwd=pod_fixtures, capture_output=True, text=True, check=True
-        ).stdout.strip()
-        assert sha == case["commit"], case["test_id"]
+        assert sha(f"{case['tag']}^{{commit}}") == case["commit"], case["test_id"]
+        if case.get("explicit_base"):
+            assert sha(f"{case['base_tag']}^{{commit}}") == case["base_commit"], case["test_id"]
+        elif case["base_commit"] is not None:
+            assert sha(f"{case['commit']}^") == case["base_commit"], case["test_id"]
 
 
 # --- against our system ----------------------------------------------
 
 
-def test_t01_to_t03_pass_on_our_system(tester):
+def test_t01_to_t03_and_t06_pass_on_our_system(tester):
     # leaves T-04, T-05 and T-07 to tickets 06 and 07, our rules lack DESIGN and the other design-side categories
     sid = setup(tester).json()["session_id"]
     found = results(run(tester, sid).json())
     ids = [t for t in found if t in ORDER]
     assert ids == ORDER
-    for test_id in ("T-01", "T-02", "T-03"):
+    for test_id in ("T-01", "T-02", "T-03", "T-06"):
         assert_outcome(found[test_id], "pass")
 
 
@@ -68,12 +71,11 @@ def test_a_stub_giving_the_expected_answers_passes_every_change_test(stub, api):
     routes, _ = stub
     healthy(routes)
     found = suite_on_stub(api)
-    for test_id in RAN:
+    for test_id in ORDER:
         assert_outcome(found[test_id], "pass")
-    assert_outcome(found["T-06"], "skip")
 
 
-def test_the_change_tests_analyse_each_commit_by_full_sha_without_a_base(stub, api):
+def test_the_change_tests_analyse_each_commit_by_full_sha_with_a_base_only_for_t06(stub, api):
     from Tester import suite
 
     routes, calls = stub
@@ -81,11 +83,31 @@ def test_the_change_tests_analyse_each_commit_by_full_sha_without_a_base(stub, a
     suite_on_stub(api)
     sent = [posted_json(c) for c in calls if c.url.path.endswith("/analyze")]
     for case in suite.CHANGE_CASES:
-        if "commit" in case:
-            assert {"repository": suite.FIXTURE_REPO, "commit_id": case["commit"]} in sent
+        request = {"repository": suite.FIXTURE_REPO, "commit_id": case["commit"]}
+        if case.get("explicit_base"):
+            request["base_commit"] = case["base_commit"]
+        assert request in sent, case["test_id"]
 
 
-@pytest.mark.parametrize("test_id", RAN)
+def test_t06_fails_when_the_system_ignores_the_base(stub, api):
+    routes, _ = stub
+    healthy(routes)
+    analyze = routes[("POST", "/analyze")]
+
+    def ignore_base(request):
+        body = posted_json(request)
+        if isinstance(body, dict):
+            body.pop("base_commit", None)
+        return analyze(httpx.Request("POST", request.url, json=body))
+
+    routes[("POST", "/analyze")] = ignore_base
+    found = suite_on_stub(api)
+    assert_outcome(found["T-06"], "fail")
+    assert "base_commit" in found["T-06"]["message"] and "src/model.py" in found["T-06"]["message"]
+    assert_outcome(found["T-02"], "pass")
+
+
+@pytest.mark.parametrize("test_id", ORDER)
 def test_swapping_one_category_fails_exactly_that_test(stub, api, test_id):
     routes, _ = stub
     healthy(routes)
@@ -100,7 +122,7 @@ def test_swapping_one_category_fails_exactly_that_test(stub, api, test_id):
     assert_outcome(found[test_id], "fail")
     message = found[test_id]["message"]
     assert "expected" in message and "got" in message and case_for(test_id)["changes"][0]["path"] in message
-    for other in RAN:
+    for other in ORDER:
         if other != test_id:
             assert_outcome(found[other], "pass")
 
@@ -160,6 +182,5 @@ def test_a_failed_analysis_fails_or_errors_the_change_test(stub, api):
     healthy(routes)
     routes[("POST", "/analyze")] = httpx.Response(502, text="bad gateway")
     found = suite_on_stub(api)
-    for test_id in RAN:
+    for test_id in ORDER:
         assert_outcome(found[test_id], "error", "system")
-    assert_outcome(found["T-06"], "skip")

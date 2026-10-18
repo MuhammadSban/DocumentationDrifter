@@ -71,7 +71,17 @@
       "test_id": "T-06",
       "components": ["C1", "C2", "C3", "C5"],
       "criteria": ["AC-01"],
-      "skip": "Waiting on Team 16 to confirm which base_commit and head their tester uses for the explicit-base test (ticket 03, needs-info)"
+      "tag": "c2-add-mod-del",
+      "commit": "332e59e3ba2b1a6c1a454ee75c3a71dfea0b4ff6",
+      "explicit_base": true,
+      "base_tag": "c0-initial",
+      "base_commit": "d19092e138ea3f9788a8eac76005ee53d22940da",
+      "changes": [
+        {"path": "docs/model.md", "old_path": null, "change_type": "MODIFIED", "category": "DOCUMENTATION"},
+        {"path": "src/eval.py", "old_path": null, "change_type": "ADDED", "category": "IMPLEMENTATION"},
+        {"path": "src/model.py", "old_path": null, "change_type": "MODIFIED", "category": "IMPLEMENTATION"},
+        {"path": "src/train.py", "old_path": null, "change_type": "DELETED", "category": "IMPLEMENTATION"}
+      ]
     },
     {
       "test_id": "T-07",

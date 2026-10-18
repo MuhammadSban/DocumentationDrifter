@@ -226,9 +226,14 @@ def _schema_problem(body: dict) -> str | None:
     return ", ".join(wrong) + " has the wrong type" if wrong else None
 
 
-def _saved_run(http: httpx.Client, target_url: str, commit: str = FIXTURE_COMMIT) -> tuple[dict | None, Result | None]:
-    # analyses a fixture commit, returns the schema-valid result or the judgement when it isn't one
-    r = _analyze(http, target_url, {"repository": FIXTURE_REPO, "commit_id": commit})
+def _saved_run(
+    http: httpx.Client, target_url: str, commit: str = FIXTURE_COMMIT, base: str | None = None
+) -> tuple[dict | None, Result | None]:
+    # analyses a fixture commit, against base when given, returns the schema-valid result or the judgement when it isn't one
+    request = {"repository": FIXTURE_REPO, "commit_id": commit}
+    if base is not None:
+        request["base_commit"] = base
+    r = _analyze(http, target_url, request)
     body = _body(r)
     if r.status_code != 200 or not isinstance(body, dict):
         return None, _unexpected(r, "200 with a saved result")
@@ -331,13 +336,12 @@ def _show(items: set) -> str:
 
 
 def change_test(case: dict) -> Callable[[httpx.Client, str], Result]:
-    # builds one change test from its entry in the data file, a skip when the entry says why it can't run yet
-    if "skip" in case:
-        return lambda http, target_url: Result("skip", case["skip"])
+    # builds one change test from its entry in the data file, sending the base only when the entry says so
+    explicit = case.get("explicit_base", False)
 
     def check(http: httpx.Client, target_url: str) -> Result:
-        # compares changes[] as an unordered set, then skipped[] and a root commit's base when the case names them
-        got, failed = _saved_run(http, target_url, case["commit"])
+        # compares changes[] as an unordered set, then skipped[] and the base when the case names them
+        got, failed = _saved_run(http, target_url, case["commit"], case["base_commit"] if explicit else None)
         if failed:
             return failed
         problems = []
@@ -349,6 +353,8 @@ def change_test(case: dict) -> Callable[[httpx.Client, str], Result]:
             want, have = _skips(case["skipped"]), _skips(got["skipped"])
             if have != want:
                 problems.append(f"expected skipped {_show(want)}, got {_show(have)}")
+        if explicit and got["base_commit"] != case["base_commit"]:
+            problems.append(f"expected base_commit {case['base_commit']} ({case['base_tag']}) as sent, got {got['base_commit']}")
         if case["base_commit"] is None:
             if got["base_commit"] is not None:
                 problems.append(f"expected base_commit null for a root commit, got {got['base_commit']}")
