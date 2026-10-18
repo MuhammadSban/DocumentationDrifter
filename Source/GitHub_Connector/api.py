@@ -1,4 +1,4 @@
-# serves the v1 API under /system: analyze and the run store, plus the course routes from course.py, and the console at /
+# serves the v1 API under /system: analyze and the run store, plus the course routes from course.py, the tester at /tester, and the console at /
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from GitHub_Connector.schemas import (
     ErrorBody,
     ErrorCode,
 )
+from Tester import api as tester
 
 # maps every contract error code to its HTTP status, the one table all failures go through
 STATUS_FOR = {
@@ -120,3 +121,8 @@ def console() -> FileResponse:
 
 router.include_router(course.router)
 app.include_router(router)
+
+# serves plain /tester here, the mount below only matches paths under /tester/
+app.get("/tester", include_in_schema=False)(tester.index)
+# mounts the tester as its own app, so it has its own OpenAPI document and /system's stays the same
+app.mount("/tester", tester.app)
