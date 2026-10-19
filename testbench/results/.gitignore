@@ -1,0 +1,3 @@
+# keeps generated website test reports and browser diagnostics out of commits
+*
+!.gitignore
