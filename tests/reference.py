@@ -22,10 +22,6 @@ SHARED_MODELS = ["AnalysisRequest", "AnalysisResult", "Change", "Finding", "Skip
 VOLATILE_FIELDS = ("analysis_id", "created_at", "tool_version")
 # allows these fields to differ, our rules file is not theirs
 KNOWN_DIFFERENT_FIELDS = ("config_version",)
-# allows these category swaps, they have no DOCUMENTATION yet
-KNOWN_CATEGORY_SWAPS = {("DOCUMENTATION", "OTHER")}
-# allows enum values only our schema has
-KNOWN_SCHEMA_EXTRAS = {"DOCUMENTATION"}
 # allows a named difference in one case, each agreed by Kaan
 KNOWN_CASE_DIFFERENCES = {
     "unfetchable-short-sha": ("body.message", "decision Q6: ours asks for the full 40-character SHA, 2026-10-17"),
@@ -103,8 +99,6 @@ def differences(ours: Any, theirs: Any, where: str = "body") -> list[str]:
             if key not in ours or key not in theirs:
                 found.append(f"{path}: only in {'ours' if key in ours else 'theirs'}")
                 continue
-            if key == "category" and (ours[key], theirs[key]) in KNOWN_CATEGORY_SWAPS:
-                continue
             found += differences(ours[key], theirs[key], path)
         return found
     if isinstance(ours, list) and isinstance(theirs, list):
@@ -158,7 +152,7 @@ def model_shape(doc: dict, name: str) -> dict:
 
 
 def schema_differences(ours: dict, theirs: dict) -> list[str]:
-    # lists differences in the shared models, allowing only our known enum extras
+    # lists every difference in the shared models, none is allowed since ticket 07
     found = []
     for name in SHARED_MODELS:
         if name not in theirs["components"]["schemas"]:
@@ -168,18 +162,9 @@ def schema_differences(ours: dict, theirs: dict) -> list[str]:
         for field in sorted(set(a) | set(b)):
             if field not in a or field not in b:
                 found.append(f"{name}.{field}: only in {'ours' if field in a else 'theirs'}")
-            elif _strip_extras(a[field]) != _strip_extras(b[field]):
+            elif a[field] != b[field]:
                 found.append(f"{name}.{field}: ours {a[field]!r}, theirs {b[field]!r}")
     return found
-
-
-def _strip_extras(value: Any) -> Any:
-    # removes our known enum extras, wherever they sit in a shape
-    if isinstance(value, frozenset):
-        return value - KNOWN_SCHEMA_EXTRAS
-    if isinstance(value, tuple):
-        return tuple(_strip_extras(v) for v in value)
-    return value
 
 
 def capture() -> None:

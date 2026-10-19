@@ -232,7 +232,7 @@ const RE_REPO = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/;      // analysis.REPOSITORY
 const RE_SHA  = /^[0-9a-fA-F]{7,40}$/;                    // analysis.SHA
 const CAT = {
   IMPLEMENTATION:"#58A6FF", DESIGN:"#A371F7", ARCHITECTURE:"#2DD4BF",
-  SPECIFICATION:"#7C8CF8", REQUIREMENT:"#D29922", DOCUMENTATION:"#3FB950", OTHER:"#6E7A8A"
+  SPECIFICATION:"#7C8CF8", REQUIREMENT:"#D29922", OTHER:"#6E7A8A"
 };
 const GLYPH = {
   ADDED:["A","var(--ok)"], MODIFIED:["M","var(--work)"], DELETED:["D","var(--error)"],
@@ -657,22 +657,22 @@ const DEMO_RUN = {
   base_commit:"72d9a86cb78072d9a86cb78072d9a86cb78072d9",
   config_version:"d07d09d08621", tool_version:"1.1.0", status:"SUCCESS", error:null, issues:[],
   changes:[
-    { path:"docs/README.md", old_path:null, change_type:"ADDED", category:"DOCUMENTATION" },
-    { path:"docs/learn/escape-hatches.md", old_path:"docs/learn/synchronizing-with-effects.md", change_type:"RENAMED", category:"DOCUMENTATION" },
-    { path:"docs/legacy/context.md", old_path:null, change_type:"DELETED", category:"DOCUMENTATION" },
-    { path:"docs/reference/react/StrictMode.md", old_path:null, change_type:"MODIFIED", category:"DOCUMENTATION" },
-    { path:"docs/reference/react/use.md", old_path:null, change_type:"MODIFIED", category:"DOCUMENTATION" },
-    { path:"docs/reference/react/useEffectEvent.md", old_path:null, change_type:"ADDED", category:"DOCUMENTATION" },
-    { path:"docs/reference/rsc/server-components.md", old_path:null, change_type:"ADDED", category:"DOCUMENTATION" },
-    { path:"docs/static/react-logo.png", old_path:null, change_type:"ADDED", category:"DOCUMENTATION" },
-    { path:"fixtures/bundle/react-dom.production.min.js", old_path:null, change_type:"MODIFIED", category:"OTHER" },
+    { path:"docs/README.md", old_path:null, change_type:"ADDED", category:"OTHER" },
+    { path:"docs/learn/escape-hatches.md", old_path:"docs/learn/synchronizing-with-effects.md", change_type:"RENAMED", category:"OTHER" },
+    { path:"docs/legacy/context.md", old_path:null, change_type:"DELETED", category:"OTHER" },
+    { path:"docs/reference/react/StrictMode.md", old_path:null, change_type:"MODIFIED", category:"OTHER" },
+    { path:"docs/reference/react/use.md", old_path:null, change_type:"MODIFIED", category:"OTHER" },
+    { path:"docs/reference/react/useEffectEvent.md", old_path:null, change_type:"ADDED", category:"OTHER" },
+    { path:"docs/reference/rsc/server-components.md", old_path:null, change_type:"ADDED", category:"OTHER" },
+    { path:"docs/static/react-logo.png", old_path:null, change_type:"ADDED", category:"OTHER" },
+    { path:"fixtures/bundle/react-dom.production.min.js", old_path:null, change_type:"MODIFIED", category:"IMPLEMENTATION" },
     { path:"packages/react/package.json", old_path:null, change_type:"MODIFIED", category:"OTHER" },
-    { path:"packages/react/src/ReactAct.js", old_path:null, change_type:"MODIFIED", category:"OTHER" },
-    { path:"packages/react/src/ReactClient.js", old_path:null, change_type:"MODIFIED", category:"OTHER" },
-    { path:"packages/react/src/ReactHooks.js", old_path:null, change_type:"MODIFIED", category:"OTHER" },
-    { path:"packages/react/src/ReactServer.js", old_path:null, change_type:"MODIFIED", category:"OTHER" },
-    { path:"packages/react/src/ReactSharedInternalsClient.js", old_path:null, change_type:"MODIFIED", category:"OTHER" },
-    { path:"packages/react/src/__tests__/ReactProfiler-test.js", old_path:null, change_type:"TYPE_CHANGED", category:"OTHER" }
+    { path:"packages/react/src/ReactAct.js", old_path:null, change_type:"MODIFIED", category:"IMPLEMENTATION" },
+    { path:"packages/react/src/ReactClient.js", old_path:null, change_type:"MODIFIED", category:"IMPLEMENTATION" },
+    { path:"packages/react/src/ReactHooks.js", old_path:null, change_type:"MODIFIED", category:"IMPLEMENTATION" },
+    { path:"packages/react/src/ReactServer.js", old_path:null, change_type:"MODIFIED", category:"IMPLEMENTATION" },
+    { path:"packages/react/src/ReactSharedInternalsClient.js", old_path:null, change_type:"MODIFIED", category:"IMPLEMENTATION" },
+    { path:"packages/react/src/__tests__/ReactProfiler-test.js", old_path:null, change_type:"TYPE_CHANGED", category:"IMPLEMENTATION" }
   ],
   skipped:[
     { path:"docs/static/react-logo.png", reason:"UNSUPPORTED_FILE_TYPE" }

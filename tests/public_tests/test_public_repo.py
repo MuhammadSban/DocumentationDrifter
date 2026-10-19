@@ -14,7 +14,7 @@ def test_our_public_repo_is_analysed_anonymously(api, github_env, recorded_helpe
     body = r.json()
     assert (body["head_commit"], body["base_commit"]) == (MERGE_PR_2, FIRST_PARENT)
     assert [(c["path"], c["change_type"], c["category"]) for c in body["changes"]] == [
-        ("Source/LLM_Shell/LLM.md", "ADDED", "DOCUMENTATION"),
+        ("Source/LLM_Shell/LLM.md", "ADDED", "OTHER"),
         ("requirements.txt", "ADDED", "OTHER"),
         ("tests/conftest.py", "ADDED", "IMPLEMENTATION"),
         ("tests/test_config.py", "ADDED", "IMPLEMENTATION"),

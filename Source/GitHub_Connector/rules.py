@@ -65,11 +65,18 @@ def is_skipped(path: str) -> bool:
 
 
 def matches(pattern: str, path: str) -> bool:
-    # matches one rule against a repo-relative path, gitignore style
-    if "/" not in pattern:
-        # matches a bare name pattern such as *.md against the file name, in any folder
-        return fnmatchcase(path.rsplit("/", 1)[-1], pattern)
-    if pattern.endswith("/**"):
-        # matches a folder pattern such as docs/** against everything under it, from the root
-        return path.startswith(pattern[:-2])
-    return fnmatchcase(path, pattern)
+    # matches one rule against a repo-relative path from the root, segment by segment, case-sensitive
+    return _segments(pattern.split("/"), path.split("/"))
+
+
+def _segments(pattern: list[str], parts: list[str]) -> bool:
+    # walks pattern and path together, ** spans any number of folders and * stays within one segment
+    if not pattern:
+        return not parts
+    head, rest = pattern[0], pattern[1:]
+    if head == "**":
+        if not rest:
+            # needs something under the folder, so docs/** never matches a file named docs
+            return bool(parts)
+        return any(_segments(rest, parts[i:]) for i in range(len(parts) + 1))
+    return bool(parts) and fnmatchcase(parts[0], head) and _segments(rest, parts[1:])

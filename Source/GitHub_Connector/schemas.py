@@ -8,13 +8,12 @@ from pydantic import BaseModel
 
 
 class Category(str, Enum):
-    # names the kind of file a change touches, DOCUMENTATION is our one addition
+    # names the kind of file a change touches, exactly Team 16's six (TT-Q12)
     IMPLEMENTATION = "IMPLEMENTATION"
     DESIGN = "DESIGN"
     ARCHITECTURE = "ARCHITECTURE"
     SPECIFICATION = "SPECIFICATION"
     REQUIREMENT = "REQUIREMENT"
-    DOCUMENTATION = "DOCUMENTATION"
     OTHER = "OTHER"
 
 

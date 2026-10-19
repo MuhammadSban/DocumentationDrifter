@@ -182,7 +182,7 @@ def test_course_session_conformance(target, github_env, live_reference):
 
 
 def test_differences_name_the_field_and_allow_only_known_ones():
-    ours = {"config_version": "abc", "changes": [{"path": "d.md", "category": "DOCUMENTATION", "change_type": "ADDED"}]}
+    ours = {"config_version": "abc", "changes": [{"path": "d.md", "category": "OTHER", "change_type": "ADDED"}]}
     same = {"config_version": "mapping-v1", "changes": [{"path": "d.md", "category": "OTHER", "change_type": "ADDED"}]}
     assert reference.differences(ours, same) == []
     other = {"config_version": "x", "changes": [{"path": "d.md", "category": "OTHER", "change_type": "MODIFIED"}]}
@@ -194,9 +194,9 @@ def test_differences_name_the_field_and_allow_only_known_ones():
 def test_known_differences_by_choice_are_removed_before_comparing():
     ours = {
         "changes": [
-            {"path": "docs/a.md", "old_path": None, "change_type": "ADDED", "category": "DOCUMENTATION"},
-            {"path": "docs/x.md", "old_path": None, "change_type": "DELETED", "category": "DOCUMENTATION"},
-            {"path": "huge.txt", "old_path": None, "change_type": "ADDED", "category": "DOCUMENTATION"},
+            {"path": "docs/a.md", "old_path": None, "change_type": "ADDED", "category": "OTHER"},
+            {"path": "docs/x.md", "old_path": None, "change_type": "DELETED", "category": "OTHER"},
+            {"path": "huge.txt", "old_path": None, "change_type": "ADDED", "category": "OTHER"},
             {"path": "logo.png", "old_path": None, "change_type": "ADDED", "category": "OTHER"},
         ],
         "skipped": [{"path": "logo.png", "reason": "UNSUPPORTED_FILE_TYPE"}],
