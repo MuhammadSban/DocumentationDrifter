@@ -138,30 +138,41 @@ def _deadline_passed() -> AnalysisError:
     )
 
 
-def _run(cmd: list[str], cwd: Path, env: dict, data: bytes, limit: float):
-    # runs one process in its own group, killing the whole group if it overruns; None on timeout
-    group = (
-        {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
-        if os.name == "nt"
-        else {"start_new_session": True}
-    )
-    proc = subprocess.Popen(
-        cmd, cwd=cwd, env=env, stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, **group,
-    )
-    try:
-        out, err = proc.communicate(data, timeout=limit)
-    except subprocess.TimeoutExpired:
-        _kill_group(proc)
-        proc.communicate()
-        return None
-    return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
+def _run(
+    cmd: list[str], cwd: Path, env: dict[str, str], data: bytes, limit: float
+) -> subprocess.CompletedProcess[bytes] | None:
+    # captures output in files, so an escaped helper cannot hold an output pipe open after timeout
+    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        proc: subprocess.Popen[bytes] = subprocess.Popen(
+            cmd, cwd=cwd, env=env, stdin=subprocess.PIPE,
+            stdout=out, stderr=err,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0,
+            start_new_session=sys.platform != "win32",
+        )
+        try:
+            proc.communicate(data, timeout=limit)
+        except subprocess.TimeoutExpired:
+            _kill_group(proc)
+            try:
+                proc.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                pass
+            return None
+        out.seek(0)
+        err.seek(0)
+        return subprocess.CompletedProcess(cmd, proc.returncode, out.read(), err.read())
 
 
-def _kill_group(proc: subprocess.Popen) -> None:
+def _kill_group(proc: subprocess.Popen[bytes]) -> None:
     # stops git and every helper it started, such as upload-pack or index-pack
-    if os.name == "nt":
-        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
+    if sys.platform == "win32":
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1,
+            )
+        except subprocess.TimeoutExpired:
+            pass
     else:
         import signal
 

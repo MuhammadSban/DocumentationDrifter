@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime, timezone
 
 from GitHub_Connector import rules, runs
-from GitHub_Connector.fetch import fetch
+from GitHub_Connector.fetch import _deadline_passed, fetch
 from GitHub_Connector.schemas import (
     AnalysisError,
     AnalysisRequest,
@@ -54,10 +54,16 @@ def slot() -> threading.BoundedSemaphore:
 
 
 def analyze(request: AnalysisRequest) -> AnalysisResult:
-    # runs one analysis in a slot, starting the deadline only once the slot is free
+    # bounds one analysis, including the wait for a free slot
     validate(request)
-    with slot():
-        return _analyze(request, time.monotonic() + get_settings().analysis_deadline)
+    deadline = time.monotonic() + get_settings().analysis_deadline
+    semaphore = slot()
+    if not semaphore.acquire(timeout=max(0, deadline - time.monotonic())):
+        raise _deadline_passed()
+    try:
+        return _analyze(request, deadline)
+    finally:
+        semaphore.release()
 
 
 def _analyze(request: AnalysisRequest, deadline: float) -> AnalysisResult:
