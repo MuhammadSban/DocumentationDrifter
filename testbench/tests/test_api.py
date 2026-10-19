@@ -55,7 +55,7 @@ def test_unknown_or_unsafe_run_returns_no_file(website_client, analysis_id):
 
 
 @pytest.mark.parametrize("label", ["root", "modified", "added-and-deleted", "renamed", "docs-category", "hidden-paths", "binary", "oversize", "non-utf8", "many-files", "mixed", "base-equals-head", "explicit-base-range", "short-sha", "unknown-commit"])
-def test_fixture_analysis_and_saved_run(website_client, website_cases, label):
+def test_fixture_analysis_and_saved_run(website_client, website_cases, pytestconfig, label):
     repository, labels = website_cases
     case = labels[label]
     try:
@@ -69,7 +69,21 @@ def test_fixture_analysis_and_saved_run(website_client, website_cases, label):
         assert body["code"] == expected["code"]
         return
     assert body["repository"] == repository
-    assert body["status"] == "SUCCESS" and body["error"] is None and body["issues"] == []
+    assert body["status"] == "SUCCESS" and body["error"] is None
+    assert isinstance(body["issues"], list)
+    if not pytestconfig.getoption("--website-url"):
+        assert body["issues"] == [], "The local bench uses a no-findings LLM test double"
+    else:
+        # checks hosted findings without assuming a live model always reports no drift
+        changes = {change["path"]: change["category"] for change in body["changes"]}
+        for finding in body["issues"]:
+            assert finding["code_file"] in changes
+            assert finding["change_category"] == changes[finding["code_file"]]
+            assert finding["issue_type"] in {"OUTDATED_DOCUMENTATION", "MISSING_DOCUMENTATION"}
+            assert finding["verification_status"] == "PENDING_REVIEW"
+            for field in ("finding_id", "code_file", "explanation"):
+                assert isinstance(finding[field], str) and finding[field]
+            assert finding["documentation_file"] is None or isinstance(finding["documentation_file"], str)
     assert re.fullmatch(r"an-[0-9a-f]{32}", body["analysis_id"])
     assert re.fullmatch(r"[0-9a-f]{40}", body["head_commit"])
     assert body["config_version"] and body["tool_version"]

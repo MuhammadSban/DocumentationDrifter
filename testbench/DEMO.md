@@ -13,6 +13,7 @@ The next step for the test-bench deliverable is to run the controlled local demo
 | File | Role in the deliverable |
 |---|---|
 | `testbench/run_testbench.py` | Runs the bench and creates a readable HTML report, JUnit XML, console log and JSON summary |
+| `testbench/local_app.py` | Launches the real local API with only the external LLM check replaced by a no-findings test double |
 | `testbench/tests/test_api.py` | 29 HTTP cases, including 15 labelled repository comparisons and immediate retrieval of successful run files |
 | `testbench/tests/test_console.py` | 17 browser cases for the console, including four known frontend defects |
 | `testbench/tests/conftest.py` | Starts isolated local API and console processes, connects to hosted targets, and cleans up servers |
@@ -43,7 +44,7 @@ Run:
 .\.venv\Scripts\python.exe testbench/run_testbench.py --mode local
 ```
 
-The bench creates the deterministic fixture repository, starts the real API and console, then runs HTTP and Chromium tests. You do not enter a repository or commit manually. The fixture manifest supplies exact head and base commits and expected lists of changes and skipped files.
+The bench creates the deterministic fixture repository, starts the real API and console, then runs HTTP and Chromium tests. The local API uses a no-findings LLM test double, so no Gemini, Claude or other provider API key is needed. This validates the application workflow with controlled model output, not model accuracy. You do not enter a repository or commit manually. The fixture manifest supplies exact head and base commits and expected lists of changes and skipped files.
 
 At the end, the terminal prints the full path to `report.html`. Open that file in Chrome using Ctrl O, or double-click it in File Explorer. Every run gets its own timestamped evidence folder, so earlier runs are retained.
 
@@ -80,7 +81,7 @@ After checking the Railway analysis stall, run:
 .\.venv\Scripts\python.exe testbench/run_testbench.py --mode live
 ```
 
-This runs all 29 API cases against Railway, including public fixture analyses. It uses the published fixture repository and verifies saved run retrieval after successful analyses. It stops after the first unexpected failure. Each analysis HTTP request has a 180-second timeout. A timeout or incorrect result must appear as a failure in the report; a stopped run is not evidence that the unexecuted cases passed.
+This runs all 29 API cases against Railway, including public fixture analyses. Hosted runs use the deployed LLM provider unchanged; its credentials must be configured on the deployment. The local LLM replacement never applies to hosted URLs. It uses the published fixture repository and verifies saved run retrieval after successful analyses. It stops after the first unexpected failure. Each analysis HTTP request has a 180-second timeout. A timeout or incorrect result must appear as a failure in the report; a stopped run is not evidence that the unexecuted cases passed.
 
 If the deployed console and API share the address shown in Chrome, the browser suite can also target that actual page:
 

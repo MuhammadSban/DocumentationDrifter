@@ -98,7 +98,7 @@ def website_url(pytestconfig, tmp_path_factory, request):
     root, _, _ = request.getfixturevalue("built")
     folder = tmp_path_factory.mktemp("website-api")
     env = {**os.environ, "DRIFTER_REMOTE_BASE_URL": root.as_uri() + "/", "DRIFTER_RUNS_DIR": str(folder / "runs"), "DRIFTER_CLONE_DIR": str(folder / "clones")}
-    command = [sys.executable, "-m", "uvicorn", "--app-dir", str(ROOT / "Source"), "GitHub_Connector.api:app", "--host", "127.0.0.1"]
+    command = [sys.executable, "-m", "uvicorn", "--app-dir", str(ROOT / "Source"), "testbench.local_app:create_app", "--factory", "--host", "127.0.0.1"]
     with _server(command, folder, "/system/health", env) as url:
         yield url
 

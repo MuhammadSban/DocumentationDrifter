@@ -53,7 +53,7 @@ def write_report(folder: Path, metadata: dict, cases: list[dict], console: str) 
     else:
         verdict = "Completed without reported failures"
     descriptions = {
-        "local": "Local API and console. GitHub replies are mocked in browser cases; one case exercises the real browser to proxy to API path with only the GitHub lookup mocked.",
+        "local": "Local API and console with a no-findings LLM test double; no provider key is required and model accuracy is not evaluated. GitHub replies are mocked in browser cases; one case exercises the real browser to proxy to API path with the GitHub lookup mocked.",
         "smoke": "Live HTTP checks for health, routes, schema, validation, unknown runs and course sessions. This mode does not submit analyses and does not prove that analyses complete.",
         "live": "Live fixture analyses and immediate retrieval of saved runs, plus API checks. Stops after the first unexpected failure. A supplied console URL also enables browser checks against that page.",
     }

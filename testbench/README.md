@@ -1,12 +1,13 @@
 # DocumentationDrifter website test suite
 
-This runnable suite targets DocumentationDrifter v1.1. It checks the real HTTP service and the existing watch-list console in Chromium. It starts both servers automatically when no URL is supplied, so Railway and GitHub are not needed for local runs.
+This runnable suite targets DocumentationDrifter's HTTP service and watch-list console in Chromium, including the v1.2 application. It starts both servers automatically when no URL is supplied, so Railway and GitHub are not needed for local runs. The bench-owned API replaces the LLM call with a deterministic no-findings test double; local and CI runs need no provider API key.
 
 All new bench files are grouped here:
 
 ```text
 testbench/
   run_testbench.py    One-command runner and HTML report generator
+  local_app.py        Test-only API launcher with a no-findings LLM replacement
   requirements.txt   Bench dependencies and the existing app requirements
   pytest.ini         Bench test discovery
   tests/             API tests, browser tests and local-server fixtures
@@ -36,7 +37,7 @@ Browser dependencies are separate from `requirements.txt`, so the deployed app d
 python -m pytest testbench/tests -q -ra --junitxml=testbench/results/website.xml --screenshot=only-on-failure --tracing=retain-on-failure --output=testbench/results/browser
 ```
 
-The suite builds the project's deterministic fixture repository, starts the actual Uvicorn API with isolated run and clone folders, and starts `Source/Frontend/ui.py` as its proxy. It closes the server processes after the run. Your development server and normal run store are not used.
+The suite builds the project's deterministic fixture repository, starts the actual Uvicorn API with isolated run and clone folders, and starts `Source/Frontend/ui.py` as its proxy. `testbench/local_app.py` replaces only `LLM_Shell.llm.check` inside that API subprocess, matching the original suite's approach without changing production code. Git comparisons, classification, HTTP handling and saved run retrieval remain real. It closes the server processes after the run. Your development server and normal run store are not used.
 
 ## Test Railway
 
@@ -64,7 +65,7 @@ Run browser tests against the locally served console backed by Railway with:
 python -m pytest testbench/tests --website-url https://documentationdrifter-production.up.railway.app -q -ra --maxfail=1
 ```
 
-The Dockerfile currently serves the API only. A Railway API URL does not imply that the console is deployed at `/`. If you separately host the console, pass its page URL with `--console-url https://your-console.example` or `DRIFTER_CONSOLE_URL`. That console must proxy its `/system` requests to the API selected by `--website-url` for the real integration test to exercise the same service.
+The v1.2 API also serves the console at `/`. Pass its page URL with `--console-url https://documentationdrifter-production.up.railway.app/` or `DRIFTER_CONSOLE_URL` to test that deployed page. If you separately host the console, it must proxy its `/system` requests to the API selected by `--website-url` for the real integration test to exercise the same service.
 
 ## What the suite checks
 
@@ -92,7 +93,7 @@ To expose these as ordinary failing tests while working on fixes:
 python -m pytest testbench/tests/test_console.py --runxfail -q
 ```
 
-Application behavior is unchanged by this suite. It does not evaluate LLM findings because `issues[]` is intentionally empty in v1.1. It does not perform load testing or claim mobile layout or accessibility coverage.
+Production application behavior is unchanged by this suite. Local runs return no findings through the LLM test double and do not evaluate model accuracy. Hosted runs use the deployed provider unchanged, require that deployment's provider credentials, and validate finding fields rather than assuming `issues[]` is empty. Provider failures remain test failures. Claude's use as a coding contributor does not configure the application's runtime model provider. The suite does not perform load testing or claim mobile layout or accessibility coverage.
 
 ## Results and CI
 
