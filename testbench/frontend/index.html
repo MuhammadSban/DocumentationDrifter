@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Drifter · Test Bench</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233f62ec'/%3E%3Cpath d='M9 8h7a8 8 0 0 1 0 16H9V8zm5 5v6h2a3 3 0 0 0 0-6h-2z' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to workspace</a>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="#main" aria-label="Drifter test bench home"><span class="brand-mark">d<span>↗</span></span><span>drifter<span class="brand-sub">TEST BENCH</span></span></a>
+    <div class="workspace-label">WORKSPACE</div>
+    <nav aria-label="Workspace navigation">
+      <a class="nav-link active" href="#main"><span aria-hidden="true">▦</span>Overview</a>
+      <a class="nav-link" href="#history"><span aria-hidden="true">◷</span>Run history</a>
+      <a class="nav-link" href="#guide"><span aria-hidden="true">▤</span>How to use</a>
+    </nav>
+    <div class="sidebar-note"><span class="small-label">BUILT FOR</span><strong>DocumentationDrifter</strong><p>API contracts, repository changes, and your website console.</p><span class="version-tag">46 tailored test cases</span></div>
+    <div class="sidebar-bottom"><span id="connection-dot" class="dot"></span><span id="connection">Connecting…</span><small id="python-version">Local workspace</small></div>
+  </aside>
+
+  <main id="main">
+    <header class="topbar"><div><span class="muted">Workspace</span><span class="breadcrumb">/</span><strong>DocumentationDrifter</strong></div><span class="environment"><span class="dot"></span>Local dashboard</span></header>
+    <div class="content">
+      <div class="page-heading"><div><div class="eyebrow">QUALITY WORKSPACE</div><h1>Website test bench<span>.</span></h1><p>Run your suite. See what passed. Keep the evidence.</p></div><a class="text-link" href="#guide">Getting started <span aria-hidden="true">↗</span></a></div>
+      <div id="error-banner" class="error-banner" role="alert" hidden></div>
+
+      <section class="summary" aria-label="Selected run summary">
+        <div class="summary-heading"><div><span class="section-kicker">SELECTED RUN</span><h2 id="summary-title">Loading saved results…</h2></div><span id="run-verdict" class="pill neutral">Waiting</span></div>
+        <div class="metrics">
+          <div class="metric"><span>Total cases</span><strong id="metric-total">—</strong><small>Recorded in this run</small></div>
+          <div class="metric"><span><i class="mini-dot passed"></i>Passed</span><strong id="metric-pass">—</strong><small>Assertions satisfied</small></div>
+          <div class="metric"><span><i class="mini-dot failed"></i>Unexpected failures</span><strong id="metric-fail">—</strong><small>Failures + setup errors</small></div>
+          <div class="metric"><span><i class="mini-dot known"></i>Known defects</span><strong id="metric-known">—</strong><small>Expected failures</small></div>
+        </div>
+        <div class="summary-footer"><span id="summary-meta">Actual results appear here after a run.</span><a id="summary-report" class="text-link" target="_blank" rel="noopener" hidden>Open full report ↗</a></div>
+      </section>
+
+      <div class="work-grid">
+        <section class="card configuration" aria-labelledby="new-run-heading">
+          <div class="card-heading"><div><span class="section-kicker">RUN CONFIGURATION</span><h2 id="new-run-heading">Start a new run</h2></div><span class="number-tag">01</span></div>
+          <form id="run-form">
+            <fieldset id="run-fields"><legend class="sr-only">Configure a test run</legend>
+              <div class="field-label">Test scope</div>
+              <div class="modes">
+                <label class="mode"><input type="radio" name="mode" value="local" checked><span class="mode-radio"></span><span><strong>Local suite <span class="recommended">RECOMMENDED</span></strong><small>API + Chromium · 46 cases</small></span></label>
+                <label class="mode"><input type="radio" name="mode" value="smoke"><span class="mode-radio"></span><span><strong>Smoke check</strong><small>Hosted API · 14 cases</small></span></label>
+                <label class="mode"><input type="radio" name="mode" value="live"><span class="mode-radio"></span><span><strong>Live analysis</strong><small>Hosted analyses · 29 cases</small></span></label>
+              </div>
+              <p id="mode-description" class="mode-description">Starts isolated local services with controlled LLM output. No API key needed.</p>
+              <div id="target-field" class="input-group" hidden><label for="target-url">API address</label><input id="target-url" type="url" placeholder="https://your-deployment.example" spellcheck="false"><small>Use your DocumentationDrifter deployment.</small></div>
+              <div id="console-field" class="input-group" hidden><label for="console-url">Deployed console <span class="optional">optional</span></label><input id="console-url" type="url" placeholder="https://your-console.example" spellcheck="false"><small>Includes browser tests when supplied · 46 cases.</small></div>
+              <label id="known-field" class="checkbox-row"><input id="show-known" type="checkbox"><span>Show known defects as failures<small>Useful when demonstrating a reproduced bug.</small></span></label>
+              <button id="run-button" type="submit" class="primary-button"><span aria-hidden="true">▶</span><span id="run-button-label">Run local suite</span><span class="button-arrow" aria-hidden="true">↗</span></button>
+            </fieldset>
+          </form>
+          <p class="configuration-note"><span aria-hidden="true">⌁</span> Each run keeps its own report and execution evidence.</p>
+        </section>
+
+        <section class="card execution" aria-labelledby="output-heading">
+          <div class="card-heading"><div><span class="section-kicker">EXECUTION</span><h2 id="output-heading">Run output</h2></div><span id="job-status" class="pill neutral">Ready</span></div>
+          <div class="execution-status"><span id="job-message">Your next run starts here.</span><span id="job-duration" class="mono">—</span></div>
+          <div id="progress-track" class="progress-track" hidden><span></span></div>
+          <div class="terminal"><div class="terminal-bar"><span><i></i><i></i><i></i></span><span>testbench / runner</span><button id="copy-log" type="button">Copy output</button></div><pre id="console-output" tabindex="0" aria-label="Test runner output">Ready when you are.
+
+Choose a scope and select Run to execute the real test bench.
+Your test results and report links will appear automatically.</pre></div>
+          <div class="execution-footer"><label><input id="auto-scroll" type="checkbox" checked> Follow output</label><button id="cancel-button" class="quiet-button danger" type="button" hidden>Cancel run</button><span id="execution-note">No run in progress</span></div>
+          <div class="scope-note"><span class="scope-icon" aria-hidden="true">i</span><p id="scope-note">Local runs exercise the real API, Git comparisons, saved results, and console. Controlled LLM output keeps runs repeatable.</p></div>
+        </section>
+      </div>
+
+      <section id="results" class="card results" aria-labelledby="results-heading">
+        <div class="card-heading"><div><span class="section-kicker">CASE BY CASE</span><h2 id="results-heading">Test results <span id="result-count" class="count-tag">0</span></h2></div><div id="artifact-links" class="artifact-links"></div></div>
+        <div class="results-toolbar"><div class="filters" role="group" aria-label="Filter test results"><button class="filter active" data-status="ALL" type="button">All <span id="count-all">0</span></button><button class="filter" data-status="PASS" type="button">Passed <span id="count-pass">0</span></button><button class="filter" data-status="FAILED" type="button">Failed <span id="count-failed">0</span></button><button class="filter" data-status="KNOWN FAILURE" type="button">Known <span id="count-known">0</span></button><button class="filter" data-status="SKIP" type="button">Skipped <span id="count-skip">0</span></button></div><div class="search-box"><span aria-hidden="true">⌕</span><input id="case-search" type="search" aria-label="Search test cases" placeholder="Search test cases…"></div></div>
+        <div class="table-scroll"><table class="case-table"><thead><tr><th scope="col">CASE</th><th scope="col">TEST NAME</th><th scope="col">RESULT</th><th scope="col">DURATION</th><th scope="col"><span class="sr-only">Details</span></th></tr></thead><tbody id="case-rows"></tbody></table></div>
+        <div id="results-empty" class="empty-state"><span aria-hidden="true">▤</span><h3>No results to display</h3><p>Run the suite or select a saved run below.</p></div>
+        <div class="table-footer"><span id="visible-count">0 test cases</span><span>Known defects are recorded separately from passed tests.</span></div>
+      </section>
+
+      <section id="history" class="card history" aria-labelledby="history-heading"><div class="card-heading"><div><span class="section-kicker">EXECUTION EVIDENCE</span><h2 id="history-heading">Run history</h2></div><button id="refresh-history" class="quiet-button" type="button">↻ Refresh</button></div><div class="table-scroll"><table class="history-table"><thead><tr><th scope="col">STARTED</th><th scope="col">SCOPE</th><th scope="col">OUTCOME</th><th scope="col">CASES</th><th scope="col">DURATION</th><th scope="col"><span class="sr-only">Open run</span></th></tr></thead><tbody id="history-rows"></tbody></table></div><p id="history-empty" class="history-empty" hidden>No saved runs yet. Start your first local suite above.</p></section>
+
+      <section id="guide" class="guide" aria-labelledby="guide-heading"><div class="guide-title"><span class="section-kicker">A QUICK WALKTHROUGH</span><h2 id="guide-heading">From input to evidence.</h2></div><div class="guide-step"><span>01</span><h3>Choose your scope</h3><p>Start locally for a controlled run. Use Smoke or Live to check your deployment.</p></div><div class="guide-step"><span>02</span><h3>Watch the execution</h3><p>The bench supplies fixture commits and checks actual responses against expectations.</p></div><div class="guide-step"><span>03</span><h3>Inspect and share</h3><p>Open a case for assertion details. Download the HTML report, XML, JSON, or log.</p></div></section>
+      <footer class="page-footer"><span>DocumentationDrifter <span class="muted">/ Test bench</span></span><span>Results from actual test execution.</span></footer>
+    </div>
+  </main>
+</div>
+<dialog id="case-dialog"><div class="dialog-top"><span class="section-kicker">TEST CASE EVIDENCE</span><button id="close-dialog" class="quiet-button" type="button" aria-label="Close test details">✕</button></div><h2 id="detail-name"></h2><div class="detail-meta"><span id="detail-status" class="pill"></span><span id="detail-time"></span></div><p id="detail-module" class="mono muted"></p><pre id="detail-output"></pre></dialog>
+</body>
+</html>
