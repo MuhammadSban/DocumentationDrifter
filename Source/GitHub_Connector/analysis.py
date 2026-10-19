@@ -15,6 +15,7 @@ from GitHub_Connector.schemas import (
     AnalysisRequest,
     AnalysisResult,
     Change,
+    ErrorBody,
     ErrorCode,
     Skipped,
     Status,
@@ -24,6 +25,8 @@ from GitHub_Connector.settings import build_label, get_settings
 # matches owner/name and 7-40 hex before any network call, \Z since $ would accept a trailing newline
 REPOSITORY = re.compile(r"^[A-Za-z0-9-]+/[A-Za-z0-9._-]+\Z")
 SHA = re.compile(r"^[0-9a-fA-F]{7,40}\Z")
+# names the error of a saved ERROR run, not an HTTP failure, so it stays out of ErrorCode
+CHANGE_LIMIT_EXCEEDED = "CHANGE_LIMIT_EXCEEDED"
 
 
 def validate(request: AnalysisRequest) -> None:
@@ -81,6 +84,16 @@ def _analyze(request: AnalysisRequest, deadline: float) -> AnalysisResult:
         skipped = [Skipped(path=s.path, reason=s.reason) for s in cmp.skipped]
         head, base = cmp.head, cmp.base
 
+    # saves an over-limit run as ERROR with nothing listed, as Team 16's system does
+    limit = get_settings().max_changed_files
+    error = None
+    if len(changes) > limit:
+        error = ErrorBody(
+            code=CHANGE_LIMIT_EXCEEDED,
+            message=f"{len(changes)} changed files exceeds the limit of {limit}",
+        )
+        changes, skipped = [], []
+
     result = AnalysisResult(
         analysis_id="an-" + uuid.uuid4().hex,
         repository=request.repository,
@@ -88,8 +101,8 @@ def _analyze(request: AnalysisRequest, deadline: float) -> AnalysisResult:
         base_commit=base,
         config_version=rules.config_version(),
         tool_version=build_label(),
-        status=Status.SUCCESS,
-        error=None,
+        status=Status.ERROR if error else Status.SUCCESS,
+        error=error,
         issues=[],
         changes=sorted(changes, key=lambda c: c.path),
         skipped=sorted(skipped, key=lambda s: s.path),

@@ -44,6 +44,9 @@ class AnalysisSettings(BaseSettings):
     # runs at most this many analyses at once, extra requests wait for a slot
     max_concurrent: int = 2
 
+    # saves a run with more changed files than this as status ERROR, CHANGE_LIMIT_EXCEEDED (TT-Q13)
+    max_changed_files: int = 2000
+
 
 @lru_cache
 def get_settings() -> AnalysisSettings:

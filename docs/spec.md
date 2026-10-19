@@ -40,8 +40,8 @@ Deployed at `https://documentationdrifter-production.up.railway.app`. Every cont
 | `base_commit` | The full SHA, or `null` for a root commit (a first audit). |
 | `config_version` | A short hash of the path rules file. Always a string. |
 | `tool_version` | `1.1.0+<short deploy commit>`. |
-| `status` | `SUCCESS` for every saved run. |
-| `error` | `null` on a saved run. |
+| `status` | `SUCCESS`, or `ERROR` for a saved run that was stopped (below). |
+| `error` | `null` on `SUCCESS`, `{"code", "message"}` on `ERROR`. |
 | `issues` | `Finding[]`. Empty in v1.1; filled by the LLM in v1.2 (*planned*). |
 | `changes` | `Change[]`, sorted by path: `path`, `old_path` (set only for RENAMED), `change_type`, `category`. |
 | `skipped` | `Skipped[]`, sorted by path: `path`, `reason` (a code). |
@@ -59,6 +59,8 @@ Deployed at `https://documentationdrifter-production.up.railway.app`. Every cont
 | `TIMEOUT` | 500 | A git call took over 60 s or the analysis over 120 s. |
 | `WRITE_FAILED` | 500 | The run file couldn't be saved. |
 | `LLM_UNAVAILABLE` | 500 | *Planned for v1.2:* the LLM call failed, so the check is incomplete. |
+
+**Saved ERROR results.** A valid commit whose diff has more than 2000 changed files (`DRIFTER_MAX_CHANGED_FILES`) is saved and returned as 200 with `status: ERROR`, empty `changes` and `skipped`, and `error` `{"code": "CHANGE_LIMIT_EXCEEDED", "message": "<n> changed files exceeds the limit of 2000"}`, as Team 16's system does (TT-Q7 row 5, TT-Q13). `GET /analysis/{id}` serves it back like any run.
 
 An unknown or malformed `analysis_id` on `GET` returns 404 `{"code": "ANALYSIS_NOT_FOUND", "message": "analysis <id> does not exist"}`.
 

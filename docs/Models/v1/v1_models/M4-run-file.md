@@ -26,8 +26,8 @@ erDiagram
     string base_commit "40 hex or null (first audit: root commit only)"
     string config_version "hash of all config: rules, LLM settings from v1.2, mapping from v1.3 or v2"
     string tool_version "service version"
-    enum status "SUCCESS in every saved v1 run"
-    object error "null in every saved v1 run"
+    enum status "SUCCESS, or ERROR above the changed-file limit"
+    object error "null on SUCCESS, CHANGE_LIMIT_EXCEEDED on ERROR"
     string created_at "UTC, ms, Z"
   }
   Change {

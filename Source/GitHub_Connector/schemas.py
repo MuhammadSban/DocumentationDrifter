@@ -28,7 +28,7 @@ class ChangeType(str, Enum):
 
 
 class Status(str, Enum):
-    # marks a run's outcome, every saved v1 run is SUCCESS
+    # marks a run's outcome, ERROR only for a saved run stopped by CHANGE_LIMIT_EXCEEDED
     SUCCESS = "SUCCESS"
     ERROR = "ERROR"
 
@@ -75,13 +75,13 @@ class Finding(BaseModel):
 
 
 class ErrorBody(BaseModel):
-    # answers every failed request, nothing is saved alongside it; code is a plain string, as theirs is
+    # answers every failed request, and names why a saved ERROR run stopped; code is a plain string, as theirs is
     code: str
     message: str
 
 
 class AnalysisResult(BaseModel):
-    # holds one successful run, saved once and served back byte for byte
+    # holds one run, SUCCESS or a saved ERROR, saved once and served back byte for byte
     analysis_id: str
     repository: str
     head_commit: str
