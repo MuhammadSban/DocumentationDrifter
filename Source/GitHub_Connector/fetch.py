@@ -36,6 +36,9 @@ LINKS = {"120000", "160000"}
 # names the one skip reason, as Team 16's system gives it (TT-Q13)
 SKIP_UNSUPPORTED = "UNSUPPORTED_FILE_TYPE"
 
+# caps how many paths one prefetch names, so a repo full of docs cannot overflow the argument list
+WARM_PATHS = 500
+
 
 @dataclass(frozen=True)
 class FileChange:
@@ -58,9 +61,10 @@ class Comparison:
     repo: str
     head: str
     base: str | None
+    _git: _Git
     changes: list[FileChange] = field(default_factory=list)
     skipped: list[SkippedFile] = field(default_factory=list)
-    _git: _Git | None = None
+    _empty: str | None = None
 
     def read(self, path: str, side: str) -> bytes | None:
         # returns a file's bytes at "base" or "head" from git objects, None where it is missing
@@ -69,6 +73,48 @@ class Comparison:
             return None
         proc = self._git.run("cat-file", "blob", f"{sha}:{path}", check=False)
         return proc.stdout if proc.returncode == 0 else None
+
+    def read_many(self, paths: list[str], side: str) -> dict[str, bytes]:
+        # reads several files in one call, leaving out any that is absent or not a blob on this side
+        sha = self.head if side == "head" else self.base
+        if sha is None or not paths:
+            return {}
+        self._warm(sha, paths)
+        proc = None
+        if not any("\n" in path or "\r" in path for path in paths):
+            revs = "".join(f"{sha}:{p}\n" for p in paths).encode("utf-8", "surrogateescape")
+            proc = self._git.run("cat-file", "--batch", input=revs, check=False)
+        if proc is None or proc.returncode != 0:
+            # reads individually for line breaks or a batch that failed on an unfetchable submodule
+            found = {}
+            for path in paths:
+                raw = self.read(path, side)
+                if raw is not None:
+                    found[path] = raw
+            return found
+        out, found, pos = proc.stdout, {}, 0
+        for path in paths:
+            end = out.index(b"\n", pos)
+            header = out[pos:end].rsplit(b" ", 2)
+            if len(header) != 3 or not header[2].isdigit():
+                # an absent or ambiguous path prints one line and no content
+                pos = end + 1
+                continue
+            start, size = end + 1, int(header[2])
+            # keeps blobs only, as a gitlink resolves to a commit object that is not the file's text
+            if header[1] == b"blob":
+                found[path] = out[start:start + size]
+            pos = start + size + 1
+        return found
+
+    def _warm(self, sha: str, paths: list[str]) -> None:
+        # names the files in a diff, which fetches their blobs in one request as git diff already does;
+        # reading them straight away makes a blobless clone fetch each blob on its own
+        if self._empty is None:
+            self._empty = self._git.out("hash-object", "-t", "tree", "--stdin")
+        for start in range(0, len(paths), WARM_PATHS):
+            batch = paths[start:start + WARM_PATHS]
+            self._git.run("diff", "--numstat", self._empty, sha, "--", *batch, check=False)
 
     def tree(self, side: str) -> list[str]:
         # lists the kept files at "base" or "head", without -l so no blob is fetched

@@ -22,6 +22,8 @@ class _Rules:
     fallback: Category
     supported_exts: frozenset[str]
     supported_names: frozenset[str]
+    docs: list[str]
+    not_docs: list[str]
 
 
 def _rules(rules_file: Path) -> _Rules:
@@ -37,7 +39,10 @@ def _load(rules_file: Path, _mtime: int, _size: int) -> _Rules:
     data = json.loads(raw)
     rules = [(r["pattern"], Category(r["category"])) for r in data.get("rules", [])]
     exts = frozenset(ext.lower() for ext in data["supported_extensions"])
-    return _Rules(raw, rules, Category(data["fallback"]), exts, frozenset(data["supported_filenames"]))
+    return _Rules(
+        raw, rules, Category(data["fallback"]), exts, frozenset(data["supported_filenames"]),
+        data.get("documentation", []), data.get("not_documentation", []),
+    )
 
 
 def config_version() -> str:
@@ -62,6 +67,14 @@ def is_skipped(path: str) -> bool:
     # reads an extension only after a leading character and before a trailing one, so .gitignore and a. have none
     ext = name[dot:].lower() if 0 < dot < len(name) - 1 else ""
     return ext not in loaded.supported_exts and name not in loaded.supported_names
+
+
+def is_doc(path: str) -> bool:
+    # tells the drift check which files are documentation, by path apart from the category (v1.2)
+    loaded = _rules(get_settings().rules_file)
+    if any(matches(p, path) for p in loaded.not_docs):
+        return False
+    return any(matches(p, path) for p in loaded.docs)
 
 
 def matches(pattern: str, path: str) -> bool:

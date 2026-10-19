@@ -589,13 +589,13 @@ function renderDetail() {
     main.appendChild(s2);
   }
 
-  /* issues[] — expanded and explicitly empty until v1.2 */
+  /* issues[] — filled by the v1.2 drift check */
   const s3 = el("section", "issues");
   const ih = el("div", "row");
   ih.appendChild(el("h2", "label", "Issues"));
   ih.appendChild(el("span", "mono num", String(run.issues.length)));
   s3.appendChild(ih);
-  if (!run.issues.length) s3.appendChild(el("p", null, "no findings — LLM analysis arrives in v1.2"));
+  if (!run.issues.length) s3.appendChild(el("p", null, "no drift detected"));
   main.appendChild(s3);
 
   /* metadata */

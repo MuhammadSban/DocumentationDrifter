@@ -7,10 +7,11 @@ Specs and documentation for DocumentationDrifter. The glossary is [CONTEXT.md](.
 New to the project? Start with the [v1.1 guide](Models/v1/v1.1/v1.1-guide.html), a plain-language overview of what v1.1 built, what v1.2 adds and how the GitHub Action comes in v3. GitHub shows an HTML file as source, so open it from a local clone.
 
 1. [CONTEXT.md](../CONTEXT.md): the words the project uses.
+   Then [spec.md](spec.md): the one current spec, what the service does and what counts as correct.
 2. [plan/roadmap.md](plan/roadmap.md): the one plan, version by version (v1.1, v1.2, v2 and on).
 3. The current version:
    - **v1.1 (built):** [Models/v1/v1.1/spec-v1.1.md](Models/v1/v1.1/spec-v1.1.md), with its tickets in `.scratch/v1-1-change-detection/`.
-   - **v1.2 (not started):** see the v1 section of the [roadmap](plan/roadmap.md).
+   - **v1.2 (implemented on `kaan_test`, awaiting deployment):** see the v1 section of the [roadmap](plan/roadmap.md).
 4. [Models/v1/](Models/v1/README.md): the v1 models, M1 to M5, narrowed from the product vision's M1 to M5.
 5. [plan/decisions.md](plan/decisions.md): every decision with its reason.
 
@@ -20,6 +21,7 @@ New to the project? Start with the [v1.1 guide](Models/v1/v1.1/v1.1-guide.html),
 |---|---|
 | What does a word mean? | [CONTEXT.md](../CONTEXT.md) |
 | What gets built in which version? | [plan/roadmap.md](plan/roadmap.md) |
+| What must the service do now, and what counts as correct? | [spec.md](spec.md) |
 | What exactly must v1.1 do? | [Models/v1/v1.1/spec-v1.1.md](Models/v1/v1.1/spec-v1.1.md) |
 | Why was something decided? | [plan/decisions.md](plan/decisions.md), and the decisions table at the end of the roadmap |
 | What are the exact rules the code must match? | [Models/v1/](Models/v1/README.md), M1 to M5 |

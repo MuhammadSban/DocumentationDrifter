@@ -34,5 +34,7 @@
   "fallback": "OTHER",
   "supported_extensions": [".py", ".ipynb", ".js", ".ts", ".java", ".c", ".h", ".cpp", ".hpp", ".go", ".rs", ".rb", ".sh",
     ".sql", ".md", ".rst", ".txt", ".yaml", ".yml", ".json", ".toml", ".cfg", ".ini", ".csv"],
-  "supported_filenames": ["LICENSE", "Makefile", "Dockerfile", "README", "CODEOWNERS"]
+  "supported_filenames": ["LICENSE", "Makefile", "Dockerfile", "README", "CODEOWNERS"],
+  "documentation": ["docs/**", "**/*.md", "**/*.rst", "**/*.txt"],
+  "not_documentation": ["**/requirements*.txt"]
 }

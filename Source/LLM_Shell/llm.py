@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 import uuid
 from dataclasses import dataclass
 
@@ -69,7 +70,9 @@ class _Drifts(BaseModel):
     findings: list[_Drift]
 
 
-def check(code: list[CodeFile], docs: list[DocFile]) -> list[Finding]:
+def check(
+    code: list[CodeFile], docs: list[DocFile], deadline: float | None = None, omitted: int = 0
+) -> list[Finding]:
     # returns one finding per outdated doc, empty when there is nothing to compare or nothing drifted
     if not code or not docs:
         return []
@@ -85,30 +88,48 @@ def check(code: list[CodeFile], docs: list[DocFile]) -> list[Finding]:
             explanation=drift.explanation,
             verification_status=PENDING,
         )
-        for drift in _ask(_prompt(code, docs))
+        for drift in _ask(_prompt(code, docs, omitted), deadline)
         # drops a finding naming a file we never sent, so every finding points at a real pair
         if drift.code_file in categories and drift.documentation_file in known_docs
     ]
 
 
-def _ask(prompt: str) -> list[_Drift]:
+def _ask(prompt: str, deadline: float | None) -> list[_Drift]:
     # makes the one call, every failure becomes LLM_UNAVAILABLE so an unchecked run is never a SUCCESS
     if not os.environ.get(KEY):
         raise _unavailable(f"{KEY} is not set")
+    remaining = None if deadline is None else deadline - time.monotonic()
+    if remaining is not None and remaining <= 0:
+        raise _unavailable("the analysis deadline passed before the drift check")
     try:
         # imports here so the app starts, and the tests run, on a machine without the SDK installed
         from google import genai
+        from google.genai import types
 
-        interaction = genai.Client().interactions.create(
-            model=get_settings().llm_model,
-            input=prompt,
-            response_format={
-                "type": "text",
-                "mime_type": "application/json",
-                "schema": _Drifts.model_json_schema(),
-            },
+        # gives the call what is left of the analysis deadline, the SDK counts in milliseconds
+        retries = types.HttpRetryOptions(attempts=0)
+        options = types.HttpOptions(
+            timeout=None if remaining is None else max(1, int(remaining * 1000)),
+            retry_options=retries,
         )
-        return _Drifts.model_validate_json(interaction.output_text).findings
+        # holds the client in a name, the SDK closes its transport when the object is collected
+        with genai.Client(http_options=options) as client:
+            # restores zero retries, the pinned SDK changes it to one during client construction
+            retries.attempts = 0
+            interaction = client.interactions.create(
+                model=get_settings().llm_model,
+                input=prompt,
+                response_format={
+                    "type": "text",
+                    "mime_type": "application/json",
+                    "schema": _Drifts.model_json_schema(),
+                },
+                stream=False,
+            )
+            text = getattr(interaction, "output_text", None)
+            if not isinstance(text, str):
+                raise ValueError("the drift check returned no text")
+            return _Drifts.model_validate_json(text).findings
     except Exception as exc:
         # covers the SDK, the network and a reply that isn't the schema, one failure as far as a caller sees
         raise _unavailable(f"the drift check did not complete: {exc}") from exc
@@ -119,7 +140,7 @@ def _unavailable(message: str) -> AnalysisError:
     return AnalysisError(ErrorCode.LLM_UNAVAILABLE, message)
 
 
-def _prompt(code: list[CodeFile], docs: list[DocFile]) -> str:
+def _prompt(code: list[CodeFile], docs: list[DocFile], omitted: int = 0) -> str:
     # lays out the instruction, then each changed file as both sides, then the docs as they stand
     parts = [INSTRUCTION, "\n# Changed files\n"]
     for c in code:
@@ -127,6 +148,9 @@ def _prompt(code: list[CodeFile], docs: list[DocFile]) -> str:
         parts.append(_side("Before", c.base))
         parts.append(_side("After", c.head))
     parts.append("\n# Documentation, as it stands after the change\n")
+    if omitted:
+        files = "file" if omitted == 1 else "files"
+        parts.append(f"\n{omitted} further documentation {files} were not included below.\n")
     for d in docs:
         parts.append(f"\n## {d.path}\n```\n{d.text}\n```\n")
     return "".join(parts)

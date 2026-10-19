@@ -255,6 +255,69 @@ Grilled with Kaan before v1.2, so the backend can be used by hand first (ticket 
 - **Done means (Q4, Q10, Q11):** pytest tests at the HTTP app, a local run against the ticket 11 test repo, and the same run on Railway after Kaan says push.
 - **Left for a complete solution (Q12):** each viewer's browser polls GitHub on its own unauthenticated budget of 60 calls an hour. At the default 300 s that is about 5 watched repos; past it the page pauses until the reset. Noted in `.scratch/v1-1-change-detection/to_do.md`.
 
+## The cross-team tester, 2026-10-18
+
+Grilled with Kaan after reading the course's cross-team testing interface (student-facing spec) and running the reference team's tester (`https://doc-tracker-5t4s.onrender.com/tester`) against their own system: 17 pass, 6 skip, 23 tests T-01 to T-23, coverage reported as code, component (C1 to C7) and system (AC-01 to AC-10).
+
+**TT-Q1 · Which category table is the pod's single source of truth? (superseded by TT-Q7 the same hour)** Ours adds DOCUMENTATION; the reference's contract (system OpenAPI v0.3.0) has IMPLEMENTATION, DESIGN, ARCHITECTURE, SPECIFICATION, REQUIREMENT and OTHER, and their T-04 checks the four design-side categories.
+**Answer:** The reference team's model. Their OpenAPI enum is the contract, and their tester's T-01 to T-23 are the model for our tester. DOCUMENTATION leaves `Change.category` and `Finding.change_category`; doc files take whatever category the reference gives them (OTHER for `docs/**`, `*.md`, `*.rst` as probed on 2026-10-17).
+**Why:** A value outside the shared enum fails schema validation, so one shared tester can't grade both systems while it stays. This reverses roadmap decision 2 and removes the "doc files are DOCUMENTATION here" known difference. The path rules that give DESIGN, ARCHITECTURE, SPECIFICATION and REQUIREMENT are still to be read off the reference (their T-04).
+
+Kaan agreed to the next five the same afternoon, each as recommended:
+
+**TT-Q2 · The shared test list.** Our tester runs the reference tester's T-01 to T-23 with the same meanings and the same skips (T-18 to T-23 wait for Phases 4 and 5). The other team is asked for their cases (test repo, commits, expected changes) as one file that both testers load.
+**Why:** The two suite reports then line up test by test, and handing our tests to the other team is handing over one file.
+
+**TT-Q3 · Coverage.** Copied exactly: component coverage counts the pod's components C1 to C7 and system coverage counts AC-01 to AC-10, each covered when at least one executed test exercises it, with the covered IDs listed in `basis`. Code coverage comes from the target's `/test/report`. C1 to C7 are not in our repo; the other team is asked for the list, which goes into `docs/spec.md`.
+**Why:** Both testers must count from one list, or the same suite gives two different coverage numbers.
+
+**TT-Q4 · Where the tester lives.** In the same Railway app at `https://documentationdrifter-production.up.railway.app/tester`, beside `/system`, as the reference does. The registry's tester URL changes from `/system/test` (the system's own test routes) to `/tester`.
+**Why:** The course spec allows different paths on one host; it is one deploy, and our tester tests our own `/system` over HTTP like any other target.
+
+**TT-Q5 · Time limits.** 90 s per project call and 600 s per suite, with each result saved as it arrives so `GET /test/report` keeps partial results after an abort or a lost response. Both numbers go in the registry's run notes. To be checked against how long the reference tester took on our system (its first run, 2026-10-18 16:50, hadn't ended after 15 minutes).
+**Why:** A cold Render start alone can exceed 50 s, and T-17 makes five analyses in a row.
+
+**TT-Q6 · Sessions.** System setup takes `setup: {}`; nothing is prepared or reset, and sessions may run at the same time. The shared spec says that on both services the code-coverage count includes requests from any session since setup.
+**Why:** Every case uses fixed public commits, so there is no state to prepare, and both services already count this way.
+
+**TT-Q7 · Team 16's contract v1.1 proposal (Parth Gupta, 2026-10-18).** Their eight rows, answered by Kaan as recommended, plus a ninth of ours. Each needs Team 16's agreement before it counts, and the date and channel go in Phase 3, Q3.2 and Q6.2.
+
+1. **`repository` is owner/name.** Agree; we already require it.
+2. **The findings list is `issues`.** Agree; we already use it.
+3. **Always return `config_version` and `created_at`.** Agree, with a counter: `config_version` is the version string declared inside the shared mapping file, so both systems report the same value and the `config_version` known difference goes.
+4. **Full 40-character SHAs, `base_commit: null` for a root commit.** Agree; we already do.
+5. **Missing repo or commit is 404; a mapping problem inside a valid commit is a saved 200 result with `status: ERROR`.** Agree. Nothing changes in Phase 3; our spec's "every saved run is SUCCESS" changes with v1.2, as the product vision's M2 had it.
+6. **One shared `mapping-v1.1.yaml`, DOCUMENTATION at lowest precedence** (REQUIREMENT, SPECIFICATION, ARCHITECTURE, DESIGN, IMPLEMENTATION, DOCUMENTATION, OTHER, first match wins). Agree. This supersedes TT-Q1: DOCUMENTATION stays (roadmap decision 2 stands), and the removal made earlier that hour was reverted before it was committed. Our `path_rules.json` is replaced by their file, loaded verbatim, once they publish it; the table's "and other code" is not precise enough to build from. Under their order `docs/conf.py` is IMPLEMENTATION, and a `*.rst` or `*.txt` outside `docs/` is OTHER.
+7. **One skip reason, `UNSUPPORTED_FILE_TYPE`.** Agree. Our content checks stay as the safety net (REQ-05), but every skip they cause is reported as `UNSUPPORTED_FILE_TYPE`. This retires `BINARY_FILE`, `FILE_TOO_LARGE` and `NOT_UTF8` (T12-Q2) and fixes their T-05 on our system.
+8. **Components C1 to C7 as the shared coverage list.** Agree; it settles TT-Q3. C1 interface, C2 repository fetch, C3 change detection and classification, C4 mapping detector (Phase 4), C5 result building and persistence, C6 saved-result retrieval, C7 review workflow (Phase 5).
+9. **Ours: hidden paths.** We propose switching to their behaviour, listing dot-paths such as `.github/` in `changes[]`. T12-Q9's rule was ours, not the contract's, so it isn't a defensible difference once a fixture touches a dot-path.
+
+**Why:** Each row closes a gap that made one team's tester fail the other team's correct system; the shared mapping file also gives the DESIGN, ARCHITECTURE, SPECIFICATION and REQUIREMENT rules we lacked for T-04.
+
+**TT-Q8 · The fixture repo.** The shared test list runs against Team 16's public `ParthGupta06/doc-tracker-fixtures`, which is the jointly owned test repository Phase 2 §4.2, §5.3 and §9.1 call for. Our `DocumentationDrifter-testrepo` stays as an internal regression set.
+
+Kaan left the last three to the recommendation:
+
+**TT-Q9 · Pass or fail.** Copied from the reference tester, plus one check from Phase 2. Change tests (T-01 to T-07) compare `changes[]` as an unordered set of (path, old_path, change_type, category); T-05 also checks the skipped paths, T-07 also `base_commit: null` and all ADDED. Error tests (T-08 to T-13) match HTTP status and error `code`, and need a non-empty `message` (AC-07, AC-08), never exact wording. T-14: the GET body equals the POST body. T-15: an unknown id is 404 `ANALYSIS_NOT_FOUND`. T-16: two runs, two ids, both retrievable unchanged. T-17: five runs agree on every field but `analysis_id` and `created_at` (`tool_version` counts, Phase 2 §5.1). An unlisted 5xx is `error` with source `system`; no response is `error` with source `communication`.
+
+**TT-Q10 · A hung run.** A watchdog stops the suite at 600 s: the test in flight becomes `error`/`communication`, untried tests `skip`, and the report is stored, so `GET /test/report` never answers 409 forever. A second `/test/run` on the same session is 409. The reference tester's session `7db7828e-a65c-4b03-87b7-2e05d780eafe` against our system shows the fault this prevents (still 409 after 20 minutes).
+
+**TT-Q11 · What to build first.** The whole tester now: the three `/tester/test` routes, the outcome and coverage rules, and T-01 to T-23 against the fixture repo, with T-18 to T-23 skipped for the reference tester's reasons (Phase 3 covers AC-01, AC-07, AC-08 and AC-10, Phase 2 §6.1). T-01 to T-07 take today's expected changes and are rechecked when `mapping-v1.1.yaml` is published.
+
+**TT-Q12 · Whose rules does our tester follow? (Kaan, the evening of 2026-10-18)** Team 16 agrees to nothing their own test suite doesn't check.
+**Answer:** Team 16's tester, line for line. Its source is public (`ParthGupta06/doc-tracker`, `doctracker/tester/suite.py` and `commits.json` at `0db21ca`), and our tester copies its requests, expected answers, pass rules and tags. This reverses, for the tester only: TT-Q7 row 6's DOCUMENTATION in the expected answers (doc files are OTHER, as their contract has no DOCUMENTATION); our own T-06 pair (theirs is `c3-rename` with base `c0-initial`); TT-Q9's "`tool_version` counts" (their T-17 compares only repository, head and base commits, status, changes, skipped and the findings without `finding_id`, on `c4-categories`); the listed-500 rule (any 5xx is the system's error); and our stricter schema check (theirs checks field types, status, change strings and `PENDING_REVIEW`). It adds their checks we lacked: T-01's default base, `status: SUCCESS` on every analysis, and their exact error requests. Their live tester against their own system, the same evening, passed T-01 to T-17 with component 5/7 and system 5/10.
+**Why:** The two testers must give the same verdict on the same system, and Team 16 has agreed to nothing else. Our own system now fails T-02 and T-06 on DOCUMENTATION for `docs/model.md`, which TT-Q7 row 6 would have kept; whether our system drops DOCUMENTATION is a separate decision.
+
+**TT-Q13 · How far does our system match Team 16's behaviour? (Kaan, the evening of 2026-10-18)** The endpoints, fields and answers must match, the implementation must be our own.
+**Answer:** The same answers for any file, not only the fixture repo. Read off their public system code (`doctracker/system/classify.py`, `analysis.py`, `mapping-v1.yaml` at `0db21ca`), as behaviour to match, never code to copy: categories by their ordered path patterns with no DOCUMENTATION (ticket 07); `skipped[]` by their supported extensions and file names alone, with no content checks and no symlink rule (ticket 06, replacing TT-Q7 row 7's safety net); hidden paths listed (ticket 08, not waiting on row 9); a saved 200 `status: ERROR` result with `CHANGE_LIMIT_EXCEEDED` above 2000 changed files (ticket 12). `config_version` stays our own, because no shared test checks it.
+**Why:** A grader may analyse any repository, not just the fixture, and the student-facing spec says behaviour must match the shared specification while teams choose their internal implementations.
+
+## `kaan_test` port and deployment (2026-10-18)
+
+Kaan requested the useful v1.2 changes from `main` be copied into `kaan_test`, retaining TT-Q13's contract, and authorized committing and pushing that branch. No merge into `main` is required. Railway must use `kaan_test` as its source branch before this version is deployed; a push is not proof of a successful deployment.
+
+Documentation selection is independent of the six reported categories. Docs past the 200 KB input budget are counted only in the prompt, without new public skip reasons. This supersedes the earlier v1.2 ticket's DOCUMENTATION and OVER_DOC_BUDGET wording. Missing-documentation detection and the public fixture AC-02/AC-03 run remain deferred.
+
 ## Still open
 
 - ~~**Skipped files, skip reasons and hidden paths**~~: decided that evening (T12-Q1, T12-Q2, T12-Q8 and T12-Q9). Still to ask the pod: their full list of unsupported file types, and whether they ever skip by content.

@@ -22,6 +22,40 @@ _Avoid_: their API, the pod (when the service is meant)
 A named way our output may differ from the reference service's, agreed by Kaan and recorded in the decision log. It normally rests on an open question or a fault in the reference service.
 _Avoid_: exception, allowed diff, deviation
 
+## Cross-team testing
+
+**System**:
+A team's deployed project service, under `/system`: the pod's project API plus the two test routes the tester calls.
+_Avoid_: backend, server (when the graded service is meant)
+
+**Tester**:
+A team's deployed test service, under `/tester`, that runs the shared test list against any system it is pointed at and returns a suite report.
+_Avoid_: test runner (for the system's own test routes), the suite (when the service is meant)
+
+**Test session**:
+One run of the shared test list against one system, named by an id the tester makes and the system's setup accepts. A new run always needs a new session.
+_Avoid_: run (that is an analysis's run file), job
+
+**Shared test list**:
+The pod's T-01 to T-23, each with its request against the fixture repo and its expected answer, run by both teams' testers so their reports line up.
+_Avoid_: our tests, their tests, test plan
+
+**Fixture repo**:
+The pod's public test repository, `ParthGupta06/doc-tracker-fixtures`, whose commits the shared test list analyses.
+_Avoid_: test repo (ours, `DocumentationDrifter-testrepo`, is an internal regression set)
+
+**Mapping file**:
+The pod's shared classification rules, `mapping-v1.1.yaml`, loaded by both systems; its version is the `config_version` of every result.
+_Avoid_: path rules (our current local file), config
+
+**Suite report**:
+The tester's one answer for a test session: an outcome for every test on the shared test list, plus code, component and system coverage.
+_Avoid_: test report (the system's own coverage answer), results
+
+**Component**:
+One of the pod's seven parts, C1 to C7: the web-service interface, repository fetch, change detection and classification, the mapping detector, result building and persistence, saved-result retrieval, and the review workflow. Counted as covered when an executed test exercises it.
+_Avoid_: module, layer
+
 ## Requests and runs
 
 **Analysis**:
@@ -60,21 +94,21 @@ One changed path between base and head, with its change type and category.
 _Avoid_: diff, delta
 
 **Category**:
-The kind of file a change touches, such as IMPLEMENTATION, DOCUMENTATION or OTHER, chosen by the first matching path rule.
+The kind of file a change touches, chosen by the first matching rule in our `path_rules.json`, which gives the same answers as Team 16's mapping: REQUIREMENT, SPECIFICATION, ARCHITECTURE, DESIGN, IMPLEMENTATION or OTHER, in that order of precedence. There is no DOCUMENTATION category, so a doc file is OTHER unless a rule names it: the design-side folders (`requirements/`, `spec/`, `specs/`, `docs/requirements/`, `docs/spec/`, `docs/specs/`, `docs/architecture/`, `docs/design/`, `docs/adr/`), or a name such as `REQUIREMENTS*.md`, `ARCHITECTURE*.md` or `DESIGN*.md` in any folder (TT-Q12, TT-Q13; the full list is in `docs/spec.md`, section 3).
 _Avoid_: change category (in prose), file type
 
 **Skipped file**:
-A changed path that could not be checked, because its file type is unsupported, it is binary, too large or not UTF-8, or it is over the doc budget. It is listed in `skipped[]` with a reason code, and a changed one is still reported as a change.
+A changed path whose name has no supported extension or file name (decided by name alone, as Team 16's system does). It is listed in `skipped[]` with the reason `UNSUPPORTED_FILE_TYPE`, and is still reported as a change.
 _Avoid_: unparsed, failed file
 
 **Doc budget** (from v1.2):
-The most documentation text sent to the LLM in one analysis (200 KB, set in config); docs past it are skipped files.
+The most documentation text sent to the LLM in one analysis (200 KB, set in config); docs past it are omitted from the prompt and counted there, without adding skipped files to the result.
 _Avoid_: doc limit, context cap
 
 ## Findings (from v1.2)
 
 **Finding**:
-A doc file the LLM judges missing or outdated because of the changes, waiting for human review.
+A doc file the LLM judges outdated because it contradicts the changed code, waiting for human review. Missing documentation is deferred until authored mappings are available.
 _Avoid_: issue, warning, alert
 
 **Mapping**:

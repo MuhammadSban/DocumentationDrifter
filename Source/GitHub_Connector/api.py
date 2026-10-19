@@ -26,6 +26,7 @@ STATUS_FOR = {
     ErrorCode.COMMIT_NOT_FOUND: 404,
     ErrorCode.TIMEOUT: 500,
     ErrorCode.WRITE_FAILED: 500,
+    ErrorCode.LLM_UNAVAILABLE: 500,
 }
 
 

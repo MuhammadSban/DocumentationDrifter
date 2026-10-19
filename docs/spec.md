@@ -1,6 +1,6 @@
 # DocumentationDrifter specification
 
-**The one current spec: what the service does and what counts as correct behaviour.** Updated 2026-10-18. v1.1 (change detection) is built and deployed; v1.2 (an LLM that fills `issues[]`) is next and is marked *planned* wherever it appears. How each version was built, and why, stays in its own files: [spec-v1.1.md](Models/v1/v1.1/spec-v1.1.md), the [roadmap](plan/roadmap.md) and the [decision log](plan/decisions.md). Where this page and the code disagree, the code on `main` is what is deployed; fix this page.
+**The one current spec: what the service does and what counts as correct behaviour.** Updated 2026-10-18. v1.1 (change detection) is built and deployed; v1.2 (an LLM that fills `issues[]`) is built on `kaan_test`, copied from `main`, and not yet deployed from there. How each version was built, and why, stays in its own files: [spec-v1.1.md](Models/v1/v1.1/spec-v1.1.md), the [roadmap](plan/roadmap.md) and the [decision log](plan/decisions.md). Deployment uses the branch selected in Railway; the requested deployment source is `kaan_test`, without merging into `main`. A push alone does not establish that the deployment has changed.
 
 Words are defined in [CONTEXT.md](../CONTEXT.md). The rules behind each part are drawn as models M1 to M5 in [Models/v1/](Models/v1/README.md).
 
@@ -42,7 +42,7 @@ Deployed at `https://documentationdrifter-production.up.railway.app`. Every cont
 | `tool_version` | `1.1.0+<short deploy commit>`. |
 | `status` | `SUCCESS`, or `ERROR` for a saved run that was stopped (below). |
 | `error` | `null` on `SUCCESS`, `{"code", "message"}` on `ERROR`. |
-| `issues` | `Finding[]`. Empty in v1.1; filled by the LLM in v1.2 (*planned*). |
+| `issues` | `Finding[]`, filled by the v1.2 drift check (section 7), sorted by `documentation_file` then `code_file`. Empty on a saved `ERROR` run. |
 | `changes` | `Change[]`, sorted by path: `path`, `old_path` (set only for RENAMED), `change_type`, `category`. |
 | `skipped` | `Skipped[]`, sorted by path: `path`, `reason` (a code). |
 | `created_at` | ISO 8601 UTC with milliseconds and a `Z`. |
@@ -58,7 +58,7 @@ Deployed at `https://documentationdrifter-production.up.railway.app`. Every cont
 | `COMMIT_NOT_FOUND` | 404 | The head or base can't be found, or a short SHA is ambiguous or not on any branch or tag. |
 | `TIMEOUT` | 500 | A git call took over 60 s or the analysis over 120 s. |
 | `WRITE_FAILED` | 500 | The run file couldn't be saved. |
-| `LLM_UNAVAILABLE` | 500 | *Planned for v1.2:* the LLM call failed, so the check is incomplete. |
+| `LLM_UNAVAILABLE` | 500 | The drift check's LLM call failed, so the check is incomplete (v1.2). |
 
 **Saved ERROR results.** A valid commit whose diff has more than 2000 changed files (`DRIFTER_MAX_CHANGED_FILES`) is saved and returned as 200 with `status: ERROR`, empty `changes` and `skipped`, and `error` `{"code": "CHANGE_LIMIT_EXCEEDED", "message": "<n> changed files exceeds the limit of 2000"}`, as Team 16's system does (TT-Q7 row 5, TT-Q13). `GET /analysis/{id}` serves it back like any run.
 
@@ -152,7 +152,7 @@ T-01 to T-06 compare `changes[]` as an unordered set of (path, old_path, change_
 | Criterion | Checks | Status |
 |---|---|---|
 | AC-01 | Every changed file is found and labelled correctly. | Passes (v1.1) |
-| AC-02, AC-03 | Outdated docs are flagged; docs updated with the code are not. | v1.2 (*planned*) |
+| AC-02, AC-03 | Outdated docs are flagged; docs updated with the code are not. | Implemented locally; public fixture AC-02/AC-03 verification remains |
 | AC-04, AC-05 | Findings wait for review; a reviewer's decision is recorded. | v3 |
 | AC-06 | Each run is a separate retrievable JSON file. | Passes until a redeploy; durable storage is v3 |
 | AC-07, AC-08 | Missing input and unknown commits return errors, not success. | Passes (v1.1) |
@@ -168,10 +168,10 @@ T-01 to T-06 compare `changes[]` as an unordered set of (path, old_path, change_
 - `config_version` and `tool_version` differ by design.
 - The wording of the unknown-commit message, and of a test setup with no body.
 
-## 7. v1.2 additions (planned)
+## 7. v1.2 additions (built, copied from `main`)
 
-- An LLM (a Gemini Flash model on Google's free tier, set in config) reads the changed files and the repository's documentation files at head (which files count is open, since DOCUMENTATION is no longer a category, TT-Q12) and fills `issues[]`. Each finding names a real changed file and a real doc file, has a valid `issue_type`, and is `PENDING_REVIEW`; the reasoning goes in `explanation`.
-- Doc files past a 200 KB total budget go to `skipped[]` with a doc-budget reason.
+- An LLM (a Gemini Flash model on Google's free tier, set in config) reads the changed files and the repository's documentation files at head (a doc is a path under `docs/`, or ending in `.md`, `.rst` or `.txt` apart from `requirements*.txt`, from the `documentation` lists in `path_rules.json`, while its reported category stays Team 16's) and fills `issues[]`. Each finding names a real changed file and a real doc file, has a valid `issue_type`, and is `PENDING_REVIEW`; the reasoning goes in `explanation`.
+- Docs past a 200 KB total budget (`DRIFTER_DOC_BUDGET_BYTES`) are left out of the prompt, which says how many were left out; they are not listed in `skipped[]`, which stays Team 16's, by file name alone. An analysis over the changed-file limit makes no LLM call.
 - Any failed LLM call (down, timeout, rate limit, missing key) fails the whole analysis with 500 `LLM_UNAVAILABLE`, and nothing is saved.
 - Conformance still matches `changes[]` exactly; `issues[]` is checked only for shape.
 - The free key limits the whole service to 5 requests a minute, 250K tokens a minute and 20 requests a day.

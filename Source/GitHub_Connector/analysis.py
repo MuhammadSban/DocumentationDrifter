@@ -21,6 +21,7 @@ from GitHub_Connector.schemas import (
     Status,
 )
 from GitHub_Connector.settings import build_label, get_settings
+from LLM_Shell import llm
 
 # matches owner/name and 7-40 hex before any network call, \Z since $ would accept a trailing newline
 REPOSITORY = re.compile(r"^[A-Za-z0-9-]+/[A-Za-z0-9._-]+\Z")
@@ -84,15 +85,18 @@ def _analyze(request: AnalysisRequest, deadline: float) -> AnalysisResult:
         skipped = [Skipped(path=s.path, reason=s.reason) for s in cmp.skipped]
         head, base = cmp.head, cmp.base
 
-    # saves an over-limit run as ERROR with nothing listed, as Team 16's system does
-    limit = get_settings().max_changed_files
-    error = None
-    if len(changes) > limit:
-        error = ErrorBody(
-            code=CHANGE_LIMIT_EXCEEDED,
-            message=f"{len(changes)} changed files exceeds the limit of {limit}",
-        )
-        changes, skipped = [], []
+        # saves an over-limit run as ERROR with nothing listed and nothing asked, as Team 16's system does
+        limit = get_settings().max_changed_files
+        error, issues = None, []
+        if len(changes) > limit:
+            error = ErrorBody(
+                code=CHANGE_LIMIT_EXCEEDED,
+                message=f"{len(changes)} changed files exceeds the limit of {limit}",
+            )
+            changes, skipped = [], []
+        else:
+            code, docs, omitted = _inputs(cmp, changes, skipped)
+            issues = llm.check(code, docs, deadline, omitted)
 
     result = AnalysisResult(
         analysis_id="an-" + uuid.uuid4().hex,
@@ -103,7 +107,7 @@ def _analyze(request: AnalysisRequest, deadline: float) -> AnalysisResult:
         tool_version=build_label(),
         status=Status.ERROR if error else Status.SUCCESS,
         error=error,
-        issues=[],
+        issues=sorted(issues, key=lambda f: (f.documentation_file or "", f.code_file)),
         changes=sorted(changes, key=lambda c: c.path),
         skipped=sorted(skipped, key=lambda s: s.path),
         created_at=_now(),
@@ -113,6 +117,53 @@ def _analyze(request: AnalysisRequest, deadline: float) -> AnalysisResult:
     except OSError as exc:
         raise AnalysisError(ErrorCode.WRITE_FAILED, "The run file could not be saved") from exc
     return result
+
+
+def _inputs(cmp, changes: list[Change], skipped: list[Skipped]) -> tuple[list, list, int]:
+    # builds what the drift check reads: the changed code, the docs at head that fit the budget, and how many didn't
+    done = {s.path for s in skipped}
+    # leaves out the docs, they are sent whole at head, and anything skipped by name was never read
+    wanted = [c for c in changes if not rules.is_doc(c.path) and c.path not in done]
+    # reads the base side at old_path, or a rename would look like a file that never existed
+    base = cmp.read_many([c.old_path or c.path for c in wanted], "base")
+    head = cmp.read_many([c.path for c in wanted], "head")
+    code = [
+        llm.CodeFile(
+            path=c.path,
+            category=c.category,
+            base=_text(base.get(c.old_path or c.path)),
+            head=_text(head.get(c.path)),
+        )
+        for c in wanted
+    ]
+
+    # reads every candidate in one call, a size pass first would fetch each blob on its own
+    candidate = [path for path in cmp.tree("head") if rules.is_doc(path) and not rules.is_skipped(path)]
+    docs: list[llm.DocFile] = []
+    omitted = 0
+    budget, used = get_settings().doc_budget_bytes, 0
+    for path, raw in cmp.read_many(candidate, "head").items():
+        # drops a doc that is not readable text with no record, an untouched file was never ours to check
+        text = None if b"\0" in raw[:8000] else _text(raw)
+        if text is None:
+            continue
+        if used + len(raw) > budget:
+            # counts a doc past the budget for the prompt, skipped[] stays Team 16's, by name alone
+            omitted += 1
+            continue
+        used += len(raw)
+        docs.append(llm.DocFile(path=path, text=text))
+    return code, docs, omitted
+
+
+def _text(raw: bytes | None) -> str | None:
+    # decodes one file as UTF-8, None where it is absent or not text
+    if raw is None:
+        return None
+    try:
+        return raw.decode()
+    except UnicodeDecodeError:
+        return None
 
 
 def _now() -> str:

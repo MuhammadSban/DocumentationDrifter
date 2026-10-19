@@ -11,12 +11,35 @@ sys.path.insert(0, str(SOURCE))
 # puts tests/ itself on the path, so tests in subfolders can import repos and reference
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# --- the key the drift check needs -----------------------------------
+
+
+def _load_dotenv():
+    # reads KEY=value lines from a gitignored .env, so the Gemini tests find the key without an export
+    env = Path(__file__).resolve().parents[1] / ".env"
+    if not env.exists():
+        return
+    import os
+
+    for line in env.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, value = line.split("=", 1)
+        # leaves a real environment variable alone, an export wins over the file
+        os.environ.setdefault(name.strip(), value.strip().strip("'\""))
+
+
+_load_dotenv()
+
+
 # --- network tests ---------------------------------------------------
 
 
 def pytest_configure(config):
     # registers the one marker every network test shares
     config.addinivalue_line("markers", "network: needs GitHub; skipped offline or with DRIFTER_OFFLINE=1")
+    config.addinivalue_line("markers", "live_llm: asks the real model, so it spends a request and needs a key")
 
 
 _github: bool | None = None
@@ -44,6 +67,11 @@ def _github_reachable() -> bool:
 def pytest_collection_modifyitems(config, items):
     # skips network tests when told to stay offline or when GitHub can't be reached
     import os
+
+    if os.environ.get("DRIFTER_OFFLINE") == "1":
+        for item in items:
+            if item.get_closest_marker("live_llm"):
+                item.add_marker(pytest.mark.skip(reason="DRIFTER_OFFLINE=1"))
 
     network = [i for i in items if i.get_closest_marker("network")]
     if not network:
@@ -192,6 +220,17 @@ def v1_env(monkeypatch, tmp_path):
     get_settings.cache_clear()
     yield paths
     get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def quiet_drift_check(request, monkeypatch):
+    # stubs the one LLM call for every v1 analysis test, so only the tests that ask for it spend a call
+    asked = "check" in request.fixturenames or request.node.get_closest_marker("live_llm")
+    if "v1_env" not in request.fixturenames or asked:
+        return
+    from LLM_Shell import llm
+
+    monkeypatch.setattr(llm, "check", lambda *args, **kwargs: [])
 
 
 @pytest.fixture

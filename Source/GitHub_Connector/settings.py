@@ -47,6 +47,12 @@ class AnalysisSettings(BaseSettings):
     # saves a run with more changed files than this as status ERROR, CHANGE_LIMIT_EXCEEDED (TT-Q13)
     max_changed_files: int = 2000
 
+    # names the model the drift check asks, a provider switch is a config change (roadmap v1.2)
+    llm_model: str = "gemini-3.8-flash"
+
+    # caps the documentation sent to the drift check, measured in raw bytes
+    doc_budget_bytes: int = 200 * 1024
+
 
 @lru_cache
 def get_settings() -> AnalysisSettings:

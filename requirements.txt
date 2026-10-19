@@ -1,6 +1,8 @@
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic-settings==2.7.1
+# calls Gemini for the v1.2 drift check, imported lazily so the app starts without a key
+google-genai==2.31.0
 # counts executable lines for the course report (v1 /system/test/report)
 coverage==7.6.10
 

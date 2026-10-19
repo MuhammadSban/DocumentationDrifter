@@ -87,9 +87,9 @@ In v1.2, AC-10 and the conformance test still require `changes[]` to match exact
 
 `Finding` keeps the pod's shape with no confidence field; the LLM's reasoning goes in `explanation` (Kaan, 2026-10-17).
 
-The LLM gets every DOCUMENTATION file at head, up to a 200 KB total (a config value); docs past the cap go to `skipped[]` with an "over doc budget" reason (Kaan, 2026-10-17).
+The LLM gets documentation at head selected independently of the six categories by the `documentation` and `not_documentation` lists in `path_rules.json`, up to a 200 KB total. Omitted docs are counted in the prompt; `skipped[]` remains name-based under TT-Q13.
 
-**Open for the v1.2 grilling (T12-Q7).** Since T12-Q2, skip reasons are codes (`UNSUPPORTED_FILE_TYPE`, `BINARY_FILE`, `FILE_TOO_LARGE`, `NOT_UTF8`): should the doc-budget reason become `OVER_DOC_BUDGET` to match?
+**Settled by TT-Q13 and the `kaan_test` port.** The only public skip reason is `UNSUPPORTED_FILE_TYPE`; the doc budget adds no public skip entries.
 
 **Goal.** For any input, our service gives the same answer as the pod's service, apart from `analysis_id` and `created_at`. In v1.1 `issues[]` is empty on purpose; v1.2 fills it from the LLM, and from then on only `changes[]` must match the pod exactly.
 
@@ -158,7 +158,7 @@ The guide predates the pod's live service. In these three places v1 follows the 
 
 - AC-02 and AC-03 are exercised on the test repo, with the LLM deciding the findings.
 - AC-10 and the conformance test still match `changes[]` exactly; `issues[]` passes the shape check (each finding names a real changed file and a real doc file and has a valid issue type).
-- Docs past the 200 KB budget appear in `skipped[]` with the "over doc budget" reason.
+- Docs past the 200 KB budget are omitted and counted in the prompt without adding entries to `skipped[]`.
 - A failed LLM call (down, timeout, rate limit or missing key) returns 500 `LLM_UNAVAILABLE` and saves nothing.
 
 ---
@@ -177,9 +177,15 @@ The guide predates the pod's live service. In these three places v1 follows the 
    - Link kept but the doc deleted → `MISSING_DOCUMENTATION`.
    - Both changed → no finding.
    - Each finding fills `code_file`, `documentation_file`, `change_category` and a templated `explanation`, and has `verification_status: PENDING_REVIEW`.
-3. **Docs detection.** The DOCUMENTATION category from v1 decides which side of a link is documentation.
+3. **Docs detection.** The documentation path selector from v1.2 decides which side of a link is documentation; reported categories retain Team 16's six values.
 4. **Reliability run** on the test repo (spec §9.1). The target is ≥90% of planted drift caught and <10% false alerts.
 5. **Conformance** with the pod's v2 once they ship it: the same mapping and the same commit should give the same `issues[]`.
+6. **GitHub Action** in the analysed repo, replacing the console's polling as the way a push reaches the service (decision 14), moved here from v3 on 2026-10-18. A push took about 4½ minutes through the console's 300 s poll, and polling faster runs into GitHub's anonymous limit of 60 calls an hour. The measurements, a diagram and the downsides are in the [v2 README](../Models/v2/README.md). It is a thin client of `POST /system/analyze` and needs no checkout. A sketch is in [actions readiness](reports/actions-readiness.md). How a run it starts reaches the console is still open; see [poll or SSE](../Models/v2/poll_or_sse.md).
+   - **Base and head** follow [guide step 3](history/github-connector-steps.md), and the Action always sends a real base. The merge bases come from `merge_base_commit` in GitHub's compare endpoint. On a PR, head is `pull_request.head.sha` and base is the merge base of `pull_request.base.sha` and head. On a push, head is `after` and base is the merge base of `before` and `after`, which is `before` unless the push was forced. A new branch (`before` all zeros) uses the merge base with the default branch (decision 15, explained with graphs in the [decision log](decisions.md#decision-15-the-base-for-a-push-that-creates-a-branch-2026-10-17)). With pushes filtered to the default branch, that happens only when the default branch is first created; the merge base then equals the head, so the Action skips that push. A deleted branch is skipped. The guide's merge-base test lands here.
+   - **Triggers and permissions.** `push` on the default branch plus `pull_request`, never `pull_request_target`. `contents: read`, with `pull-requests: write` only in a separate comment job for same-repo PRs, because fork PRs get a read-only token.
+   - **Calls.** `GET /system/health` with retries first, to ride out the cold start, then one `POST` with a long timeout and no retry.
+   - **Results.** The summary goes to `$GITHUB_STEP_SUMMARY`, which works on fork PRs, and the run file is uploaded as an artifact. Artifacts expire within 90 days, so that is a copy, not the REQ-04 evidence. Until v3's durable storage, a push to this repo's `main` also redeploys Railway and wipes the run store, so there the artifact is the only copy.
+   - **Distribution.** Our repo is public (checked 2026-10-18), so other repos can `uses:` a reusable workflow from it.
 
 **Acceptance criteria for v2**
 
@@ -198,12 +204,7 @@ The guide predates the pod's live service. In these three places v1 follows the 
 **Scope**
 
 1. **Durable run storage.** Railway's container disk is wiped on every redeploy and restart. Its Free plan allows one 0.5 GB volume, which could hold run files; otherwise the free durable option is an evidence repo written through the Contents API. Either sits behind the `runs.py` interface from slice 9.
-2. **GitHub Action** in the analysed repo, the only v3 trigger (decision 14). It is a thin client of `POST /system/analyze` and needs no checkout. A sketch is in [actions readiness](reports/actions-readiness.md).
-   - **Base and head** follow [guide step 3](history/github-connector-steps.md), and the Action always sends a real base. The merge bases come from `merge_base_commit` in GitHub's compare endpoint. On a PR, head is `pull_request.head.sha` and base is the merge base of `pull_request.base.sha` and head. On a push, head is `after` and base is the merge base of `before` and `after`, which is `before` unless the push was forced. A new branch (`before` all zeros) uses the merge base with the default branch (decision 15, explained with graphs in the [decision log](decisions.md#decision-15-the-base-for-a-push-that-creates-a-branch-2026-10-17)). With pushes filtered to the default branch, that happens only when the default branch is first created; the merge base then equals the head, so the Action skips that push. A deleted branch is skipped. The guide's merge-base test lands here.
-   - **Triggers and permissions.** `push` on the default branch plus `pull_request`, never `pull_request_target`. `contents: read`, with `pull-requests: write` only in a separate comment job for same-repo PRs, because fork PRs get a read-only token.
-   - **Calls.** `GET /system/health` with retries first, to ride out the cold start, then one `POST` with a long timeout and no retry.
-   - **Results.** The summary goes to `$GITHUB_STEP_SUMMARY`, which works on fork PRs, and the run file is uploaded as an artifact. Artifacts expire within 90 days, so that is a copy, not the REQ-04 evidence.
-   - **Distribution.** If our repo stays private, public repos can't `uses:` an action from it, so ship a copy-paste workflow template or publish from a public repo.
+2. ~~**GitHub Action**~~ Moved to v2 item 6 (Kaan, 2026-10-18; why: the [v2 README](../Models/v2/README.md)).
 3. **Review recording.** `POST /system/analysis/{id}/review` (or PR-comment replies read back) stores the decision, the reviewer and a timestamp alongside the run. The run file itself is never rewritten. Agree on the shape with the pod first, because it extends the shared contract.
 4. ~~**Connect v0's webhook** to `analyze()`~~ Moved to v4 (decision 14). The Action covers push and PR events, and on the free tier a webhook sent while the service sleeps is lost.
 5. **Run history**: list past runs for a repo, shown in the v1 console (served at `/` since ticket 18) if the course still requires the Phase 3 "documentation viewer". The pod's service has no UI.
@@ -251,11 +252,11 @@ Each of these stays out until Kaan decides to add it (per `AGENTS.md`):
 | 7 | Where reviews live: a review endpoint or PR replies. | A small review endpoint agreed with the pod. It's testable for AC-05. | v3 |
 | 8 | ~~Host~~ | **Decided:** Railway (Kaan, 2026-10-17), replacing Render, whose free tier needs a card on file that wouldn't verify. Railway's Free plan needs no card: 0.5 GB RAM per service after a 30-day, $5 trial, with sleep-when-idle turned on so the monthly usage allowance lasts. In v3, durable runs go to its 0.5 GB volume or to an evidence repo. | v1 slice 11, v3 |
 | 9 | ~~Exclude `.github/` docs such as `CONTRIBUTING.md`?~~ (guide open point 1) | **Decided:** yes, as every hidden path is ignored (T12-Q9, Kaan, 2026-10-17), even though the reference service lists them; a known difference by choice. | v1 slice 5 |
-| 10 | Diff PRs from the merge base rather than `pull_request.base.sha`? (guide open point 3) | Yes, in the v3 Action, which reads it from the compare endpoint. Agree it with the pod. | v3 |
+| 10 | Diff PRs from the merge base rather than `pull_request.base.sha`? (guide open point 3) | Yes, in the Action (v2 since 2026-10-18), which reads it from the compare endpoint. Agree it with the pod. | v2 |
 | 11 | Path rules for DESIGN, ARCHITECTURE, SPECIFICATION and REQUIREMENT (guide open point 4) | None in v1. Until the pod agrees on conventions such as `docs/design/**`, those files count as DOCUMENTATION under `docs/` or when named `*.md`, `*.rst` or `*.txt`, and as OTHER otherwise. | v1 slice 8 |
 | 12 | ~~`requirements.txt` caught by `*.txt`~~ | **Decided:** `requirements*.txt` → OTHER, ahead of the `*.txt` rule (Kaan, 2026-10-17). | — |
 | 13 | ~~Save failed analyses?~~ | **Decided:** no (Kaan, 2026-10-17). A failure returns 400, 404 or 500 with an `ErrorBody` and saves nothing, which matches the pod's service and models M2 and M4. Phase 2's M2 drew saved ERROR runs with HTTP 200; v1 does not do that. | — |
-| 14 | ~~Which v3 trigger: the Action, the webhook, or both?~~ | **Decided:** the Action only, and wiring the webhook moves to v4 (Kaan, 2026-10-17, applying [actions readiness](reports/actions-readiness.md)). Both on `push` would analyse every push twice, and on the free tier the webhook loses deliveries sent while the service sleeps. | — |
+| 14 | ~~Which v3 trigger: the Action, the webhook, or both?~~ | **Decided:** the Action only, and wiring the webhook moves to v4 (Kaan, 2026-10-17, applying [actions readiness](reports/actions-readiness.md)). Both on `push` would analyse every push twice, and on the free tier the webhook loses deliveries sent while the service sleeps. The Action moved from v3 to v2 (Kaan, 2026-10-18; why: the [v2 README](../Models/v2/README.md)). | — |
 | 15 | ~~What base does a new-branch push send?~~ | **Decided:** the merge base with the default branch (Kaan, 2026-10-17). The contract can't ask for a first audit for a head that isn't a root commit, and a first audit would list the whole repo as ADDED. "First audit" (base `null`) now means a root commit only. Graphs and reasoning: the [decision log](decisions.md#decision-15-the-base-for-a-push-that-creates-a-branch-2026-10-17). | — |
 | 16 | ~~Keep hunks in v1?~~ | **Decided:** dropped from v1.1, with no `git diff -U0` and no `unidiff` (Kaan, 2026-10-17). v1.2 may still pass the plain `git diff` text to the LLM. | — |
 | 17 | ~~Lockfiles~~ | **Decided** by T12-Q2 (Kaan, 2026-10-17): a lockfile is OTHER in `changes[]` and also skipped as `UNSUPPORTED_FILE_TYPE`, as the reference service does. | — |

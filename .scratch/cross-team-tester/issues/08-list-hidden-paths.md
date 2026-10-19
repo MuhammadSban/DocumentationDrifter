@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** done (2026-10-18), not yet deployed. Dot-paths use the ordinary category and skip rules, cross-hidden renames retain `old_path`, and the conformance exemption is removed. The internal fixture expectations and current docs are updated; Kaan republishes the manifest.
+**Status:** ready-for-human · implemented (2026-10-18), not yet deployed. Dot-paths use the ordinary category and skip rules, cross-hidden renames retain `old_path`, and the conformance exemption is removed. The internal fixture expectations and current docs are updated; Kaan republishes the manifest.
 
 **Spec:** docs/plan/decisions.md, TT-Q7 row 9 and TT-Q13; Team 16's `doctracker/system/classify.py`, `analysis.py` and `mapping-v1.yaml` at `0db21ca`
 
