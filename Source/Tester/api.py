@@ -66,8 +66,9 @@ def _http_error(_: Request, exc: HTTPException) -> JSONResponse:
 
 @dataclass
 class Session:
-    # holds one session's target and, once the suite ends, its report bytes
+    # holds one session's target, whether its suite has started, and once it ends its report bytes
     target_url: str
+    started: bool = False
     report: bytes | None = None
 
 
@@ -87,6 +88,15 @@ class Sessions:
         # finds a session, None when it was never set up
         with self._lock:
             return self._sessions.get(session_id)
+
+    def start(self, session_id: str) -> bool:
+        # claims a session's one run, False when it has already started
+        with self._lock:
+            session = self._sessions[session_id]
+            if session.started:
+                return False
+            session.started = True
+            return True
 
     def finish(self, session_id: str, report: bytes) -> None:
         # stores the suite report, so GET /test/report serves the same bytes
@@ -117,11 +127,18 @@ def test_setup(request: TesterSetupRequest):
 
 @app.post("/test/run")
 def test_run(request: TesterRunRequest):
-    # runs the shared tests on a session and returns the stored suite report
+    # runs a session's suite once and returns the stored report, 500 when it aborted
     session = SESSIONS.get(request.session_id)
     if session is None:
         return tester_error(404, f"session {request.session_id} is unknown")
-    data = json.dumps(suite.run(request.session_id, session.target_url)).encode()
+    if not SESSIONS.start(request.session_id):
+        return tester_error(409, f"session {request.session_id} has already run or is running")
+    try:
+        report = suite.run(request.session_id, session.target_url)
+    except suite.Aborted as exc:
+        SESSIONS.finish(request.session_id, json.dumps(exc.report).encode())
+        return tester_error(500, exc.message)
+    data = json.dumps(report).encode()
     SESSIONS.finish(request.session_id, data)
     return _json(data)
 

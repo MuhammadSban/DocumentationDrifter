@@ -8,11 +8,11 @@ CRITERIA = [f"AC-{n:02d}" for n in range(1, 11)]
 
 
 def outcomes(skip: set[str] = frozenset()) -> list[dict]:
-    # makes one result per shared test, skip for the ids given and pass for the rest
+    # makes one result per shared test, skip for the ids given and the planned skips, pass for the rest
     from Tester import suite
 
     return [
-        {"test_id": t.test_id, "outcome": "skip" if t.test_id in skip else "pass", "message": "m"}
+        {"test_id": t.test_id, "outcome": "skip" if t.test_id in skip or t.check is None else "pass", "message": "m"}
         for t in suite.TESTS
     ]
 

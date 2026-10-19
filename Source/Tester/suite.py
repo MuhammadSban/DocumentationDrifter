@@ -4,14 +4,17 @@
 from __future__ import annotations
 
 import json
+import os
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
 
 import httpx
 
-# gives each target call the per-call limit chosen in TT-Q5
-CALL_TIMEOUT = 90.0
+# gives each target call and the whole suite the limits chosen in TT-Q5, in seconds
+CALL_TIMEOUT = float(os.environ.get("TESTER_CALL_TIMEOUT", "90"))
+SUITE_TIMEOUT = float(os.environ.get("TESTER_SUITE_TIMEOUT", "600"))
 
 # reads the fixture commits and the change tests' expected answers from one file, so it can be handed to Team 16 as it is
 EXPECTED = json.loads((Path(__file__).parent / "expected_changes.json").read_text(encoding="utf-8"))
@@ -348,11 +351,16 @@ def change_test(case: dict) -> Callable[[httpx.Client, str], Result]:
 
 
 class SharedTest(NamedTuple):
-    # defines one shared test: its id, its judge, and the components and criteria it exercises
+    # defines one shared test: its id, its judge, the components and criteria it exercises, and why it waits when it has no judge
     test_id: str
-    check: Callable[[httpx.Client, str], Result]
+    check: Callable[[httpx.Client, str], Result] | None
     components: list[str]
     criteria: list[str]
+    skip: str | None = None
+
+
+# words Team 16's reasons for T-18 to T-20, which wait for the detector
+PHASE_4 = "Documentation detection is the Phase 4 milestone (Phase 2, Section 6.2)."
 
 
 # lists the shared tests in the order they run, with Team 16's tags, the change tests' from the data file
@@ -368,19 +376,40 @@ TESTS: list[SharedTest] = [
     SharedTest("T-15", t15, ["C1", "C6"], ["AC-06", "AC-08"]),
     SharedTest("T-16", t16, ["C1", "C2", "C3", "C5", "C6"], ["AC-06"]),
     SharedTest("T-17", t17, ["C1", "C2", "C3", "C5"], ["AC-10"]),
+    SharedTest("T-18", None, ["C4"], ["AC-02"], f"Missing mapped documentation finding: {PHASE_4}"),
+    SharedTest("T-19", None, ["C4"], ["AC-02"], f"Unchanged mapped documentation finding: {PHASE_4}"),
+    SharedTest("T-20", None, ["C4"], ["AC-03"], f"Code and documentation updated together: {PHASE_4}"),
+    SharedTest(
+        "T-21", None, ["C4", "C5"], ["AC-04"], "New findings start PENDING_REVIEW: Requires findings from the Phase 4 detector."
+    ),
+    SharedTest(
+        "T-22", None, ["C7"], ["AC-05"],
+        "Authorized and unauthorized review decisions: Review workflow is the Phase 5 milestone (Phase 2, Section 6.3).",
+    ),
+    SharedTest(
+        "T-23", None, ["C2"], ["AC-09"],
+        "Read-only analysis, no repository code execution: Requires source comparison and code inspection; scheduled for Phase 5.",
+    ),
 ]
 
 
-def _run_one(http: httpx.Client, target_url: str, test: SharedTest) -> dict:
-    # runs one test, a call with no answer is an error from communication
-    try:
-        result = test.check(http, target_url)
-    except httpx.TransportError as exc:
-        result = Result("error", f"the target gave no answer: {exc}", "communication")
+def _found(test: SharedTest, result: Result) -> dict:
+    # words one result for the suite report, source only on an error
     found = {"test_id": test.test_id, "outcome": result.outcome, "message": result.message}
     if result.source is not None:
         found["source"] = result.source
     return found
+
+
+def _run_one(http: httpx.Client, target_url: str, test: SharedTest) -> dict:
+    # runs one test, a planned one is skipped, a call with no answer is an error from communication
+    if test.check is None:
+        return _found(test, Result("skip", test.skip or ""))
+    try:
+        result = test.check(http, target_url)
+    except httpx.TransportError as exc:
+        result = Result("error", f"the target gave no answer: {exc}", "communication")
+    return _found(test, result)
 
 
 # --- coverage --------------------------------------------------------
@@ -429,14 +458,68 @@ def tag_coverage(results: list[dict]) -> dict:
     }
 
 
-def run(session_id: str, target_url: str) -> dict:
-    # runs every shared test once, then reads the target's report, in the suite report's field order
-    with client() as http:
-        results = [_run_one(http, target_url, test) for test in TESTS]
-        code = code_coverage(http, target_url, session_id)
+class Aborted(Exception):
+    # carries the report of a suite cut short by its limit or a tester failure, and why
+
+    def __init__(self, message: str, report: dict) -> None:
+        super().__init__(message)
+        self.message, self.report = message, report
+
+
+def _report(session_id: str, target_url: str, results: list[dict], code: dict) -> dict:
+    # builds the suite report in its field order
     return {
         "session_id": session_id,
         "target_url": target_url,
         "results": results,
         "coverage": {"code": code, **tag_coverage(results)},
     }
+
+
+def _warm(http: httpx.Client, target_url: str) -> None:
+    # wakes a sleeping target once before the tests, its answer is not judged
+    try:
+        http.get(f"{target_url}/health")
+    except httpx.TransportError:
+        pass
+
+
+def run(session_id: str, target_url: str) -> dict:
+    # runs every shared test once in a worker, raises Aborted past the suite limit or on a tester failure
+    results: list[dict] = []
+    code: dict = {}
+    failure: list[Exception] = []
+    lock, ended, stopped = threading.Lock(), threading.Event(), threading.Event()
+
+    def work() -> None:
+        # keeps each result as soon as it's known, and nothing once the suite was stopped
+        try:
+            with client() as http:
+                _warm(http, target_url)
+                for test in TESTS:
+                    found = _run_one(http, target_url, test)
+                    with lock:
+                        if stopped.is_set():
+                            return
+                        results.append(found)
+                code.update(code_coverage(http, target_url, session_id))
+        except Exception as exc:
+            failure.append(exc)
+        finally:
+            ended.set()
+
+    threading.Thread(target=work, daemon=True).start()
+    in_time = ended.wait(SUITE_TIMEOUT)
+    with lock:
+        stopped.set()
+        done = list(results)
+    if in_time and not failure:
+        return _report(session_id, target_url, done, code)
+    why = f"the tester failed: {failure[0]!r}" if failure else f"the suite passed its {SUITE_TIMEOUT:g} s limit"
+    # marks the test in flight an error from the tester and every untried one skip
+    for i, test in enumerate(TESTS[len(done):]):
+        in_flight = i == 0 and test.check is not None
+        done.append(_found(test, Result("error", f"not judged, {why}", "tester") if in_flight else Result("skip", test.skip or f"not run, {why}")))
+    raise Aborted(f"the suite was aborted, {why}; GET /test/report has the results so far", _report(
+        session_id, target_url, done, _uncounted(f"not read, {why}")
+    ))
