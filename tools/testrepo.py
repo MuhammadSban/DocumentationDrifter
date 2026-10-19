@@ -104,10 +104,16 @@ EXPECTED = {
     ], []),
     "renamed": ("renamed", None, [change("src/helpers.py", "RENAMED", "IMPLEMENTATION", "src/util.py")], []),
     "docs-category": ("docs-category", None, [change("docs/installation.rst", "MODIFIED", "OTHER")], []),
-    "hidden-paths": ("hidden-paths", None, [change("lib/visible.py", "ADDED", "IMPLEMENTATION")], []),
+    "hidden-paths": ("hidden-paths", None, [
+        change(".github/CONTRIBUTING.md", "ADDED", "OTHER"),
+        change(".github/workflows/ci.yml", "ADDED", "OTHER"),
+        change(".gitignore", "ADDED", "OTHER"),
+        change("docs/.drafts/note.md", "ADDED", "OTHER"),
+        change("lib/visible.py", "ADDED", "IMPLEMENTATION"),
+    ], [skip(".gitignore", UNSUPPORTED)]),
     "renames-across-hidden": ("renames-across-hidden", None, [
-        change("docs/contributing.md", "ADDED", "OTHER"),
-        change("docs/old.md", "DELETED", "OTHER"),
+        change(".archive/old.md", "RENAMED", "OTHER", "docs/old.md"),
+        change("docs/contributing.md", "RENAMED", "OTHER", ".github/CONTRIBUTING.md"),
     ], []),
     "symlink": ("symlink", None, [
         change("link-to-readme", "ADDED", "OTHER"),
@@ -133,6 +139,8 @@ EXPECTED = {
     ], [skip("poetry.lock", UNSUPPORTED)]),
     "many-files": ("many-files", None, [change(f"bulk/f{i:03d}.txt", "ADDED", "OTHER") for i in range(301)], []),
     "mixed": ("mixed", None, [
+        change(".assets/secret.png", "ADDED", "OTHER"),
+        change(".env.example", "ADDED", "OTHER"),
         change("assets/icon.png", "ADDED", "OTHER"),
         change("data/huge.txt", "ADDED", "OTHER"),
         change("docs/guide.md", "ADDED", "OTHER"),
@@ -144,6 +152,8 @@ EXPECTED = {
         change("src/app.py", "MODIFIED", "IMPLEMENTATION"),
         change("vendor/other", "ADDED", "OTHER"),
     ], [
+        skip(".assets/secret.png", UNSUPPORTED),
+        skip(".env.example", UNSUPPORTED),
         skip("assets/icon.png", UNSUPPORTED),
         skip("mixlink", UNSUPPORTED),
         skip("vendor/other", UNSUPPORTED),
@@ -257,6 +267,7 @@ def build(dest: Path) -> dict:
     manifest = {
         "format": 1,
         "about": "Labelled cases for DocumentationDrifter v1.1. Each label is one request and its expected answer; "
+                 "dot-paths are listed and renames across them stay RENAMED. "
                  "planted_drift stays empty until v1.2 and v2 add drift cases.",
         "labels": dict(sorted(labels.items())),
     }

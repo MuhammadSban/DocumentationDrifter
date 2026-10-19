@@ -71,10 +71,6 @@ _Avoid_: unparsed, failed file
 The most documentation text sent to the LLM in one analysis (200 KB, set in config); docs past it are skipped files.
 _Avoid_: doc limit, context cap
 
-**Ignored path**:
-A hidden path (any segment starting with `.`), symlink or submodule, which is out of scope and not listed anywhere.
-_Avoid_: excluded file (it suggests a skipped file)
-
 ## Findings (from v1.2)
 
 **Finding**:

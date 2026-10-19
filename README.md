@@ -9,6 +9,8 @@ v1.1 is built: given a public repo and two commits, it lists every changed file 
 
 `POST /system/analyze` takes `{"repository": "owner/name", "commit_id": "<7-40 hex>", "base_commit": "<optional>"}` and returns every changed file of a public GitHub repo with its change type and category. `GET /system/analysis/{analysis_id}` returns the saved run byte for byte. The contract matches the reference service; see `docs/Models/v1/v1.1/spec-v1.1.md`.
 
+**Dot-paths.** Files such as `.github/workflows/ci.yaml` and `.gitignore` are reported like any other path, with the same category and skip rules. A rename into or out of a dot-path stays one RENAMED change with `old_path` set.
+
 **Route list.** Opening plain `/system` returns the list of routes. The reference service has no such route; it stays out of the OpenAPI document.
 
 **Course test routes.** `POST /system/test/setup` with `{"session_id": "...", "setup": {...}}` opens a session (201, or 409 if the id is taken). `GET /system/test/report?session_id=...` then reports how many executable lines of the v1 code ran while handling requests since that setup: `{"session_id", "coverage": {"code": {"covered", "total", "basis"}}}`. Both match the reference service's shapes and error bodies (`{"message", "source": "system"}`). Sessions live in memory, so a restart or redeploy forgets them and their report becomes 404.

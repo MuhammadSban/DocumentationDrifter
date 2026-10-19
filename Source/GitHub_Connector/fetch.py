@@ -274,18 +274,13 @@ def _first_parent(git: _Git, head: str) -> str | None:
 
 
 def kept(path: str, mode: str) -> bool:
-    # admits a regular file with no hidden segment, everything else is an ignored path
-    return mode in REGULAR and not _hidden(path)
+    # admits regular files, including dot-paths
+    return mode in REGULAR
 
 
 def listed(path: str, mode: str) -> bool:
-    # admits a changed path for changes[], a kept file or a symlink or submodule with no hidden segment
-    return (mode in REGULAR or mode in LINKS) and not _hidden(path)
-
-
-def _hidden(path: str) -> bool:
-    # tells a hidden path, any segment starting with a dot
-    return any(part.startswith(".") for part in path.split("/"))
+    # admits changed files and links, including dot-paths
+    return mode in REGULAR or mode in LINKS
 
 
 def _diff(git: _Git, old: str, head: str) -> list[FileChange]:
@@ -301,7 +296,7 @@ def _diff(git: _Git, old: str, head: str) -> list[FileChange]:
         if letter == "R":
             old_path, new_path = fields[i + 1], fields[i + 2]
             i += 3
-            # checks each side on its own, so an ignored path never shows, not even as old_path
+            # checks each side's mode, preserving the rename when both are listed
             old_ok, new_ok = listed(old_path, old_mode), listed(new_path, new_mode)
             if old_ok and new_ok:
                 changes.append(FileChange(new_path, ChangeType.RENAMED, old_path))

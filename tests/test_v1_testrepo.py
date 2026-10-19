@@ -62,7 +62,7 @@ def test_mixed_commit_repeats_identically(local_api, built):
     assert strip[0] == strip[1] == strip[2]
 
 
-def test_mixed_commit_reports_every_path_not_ignored(local_api, built):
+def test_mixed_commit_reports_every_touched_path(local_api, built):
     _, bare, manifest = built
     entry = manifest["labels"]["mixed"]
     body = check(local_api, LOCAL_NAME, "mixed", entry)
@@ -75,11 +75,8 @@ def test_mixed_commit_reports_every_path_not_ignored(local_api, built):
     reported = {c["path"] for c in body["changes"]} | {c["old_path"] for c in body["changes"] if c["old_path"]}
     skipped = {s["path"] for s in body["skipped"]}
     assert skipped <= reported, "every skipped file is also a change"
-    for path in touched:
-        # ignores hidden paths only, symlinks and submodules are reported too (ticket 17)
-        ignored = any(p.startswith(".") for p in path.split("/"))
-        assert ignored != (path in reported), f"{path}: ignored={ignored}, reported={path in reported}"
-    assert ".assets/secret.png" in touched and ".assets/secret.png" not in reported | skipped
+    assert set(touched) == reported, "every touched path is reported, including both sides of a rename"
+    assert {".assets/secret.png", ".env.example"} <= skipped
 
 
 @pytest.fixture

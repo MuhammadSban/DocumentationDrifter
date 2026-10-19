@@ -1,4 +1,4 @@
-# covers ticket 05: change types, renames, and ignored paths that never appear anywhere
+# covers change types and dot-paths, including renames and name-based skips
 
 import os
 
@@ -93,17 +93,43 @@ def test_tester_change_types(api, make_repo):
     ]
 
 
-def test_hidden_paths_are_ignored(api, make_repo):
+@pytest.mark.parametrize("first_audit", [False, True], ids=["with-base", "first-audit"])
+def test_hidden_paths_are_listed_classified_and_skipped_by_name(api, make_repo, first_audit):
     repo = make_repo()
-    repo.commit({"seed": "0\n"})
+    if not first_audit:
+        repo.commit({"seed": "0\n"})
     head = repo.commit({
+        ".github/check.py": "print('check')\n",
         ".gitignore": "*.pyc\n",
         ".github/x.md": "# workflows\n",
+        ".github/workflows/ci.yaml": "name: CI\n",
         "src/a.py": "x = 1\n",
         "docs/.cache/deep.md": "hidden deep\n",
         "src/pkg/.env.example": "A=1\n",
     })
-    assert listing(analyse(api, head)) == [("src/a.py", "ADDED", None)]
+    body = analyse(api, head)
+    assert listing(body) == [
+        (".github/check.py", "ADDED", None),
+        (".github/workflows/ci.yaml", "ADDED", None),
+        (".github/x.md", "ADDED", None),
+        (".gitignore", "ADDED", None),
+        ("docs/.cache/deep.md", "ADDED", None),
+        ("src/a.py", "ADDED", None),
+        ("src/pkg/.env.example", "ADDED", None),
+    ]
+    assert {c["path"]: c["category"] for c in body["changes"]} == {
+        ".github/check.py": "IMPLEMENTATION",
+        ".github/workflows/ci.yaml": "OTHER",
+        ".github/x.md": "OTHER",
+        ".gitignore": "OTHER",
+        "docs/.cache/deep.md": "OTHER",
+        "src/a.py": "IMPLEMENTATION",
+        "src/pkg/.env.example": "OTHER",
+    }
+    assert skipped(body) == [
+        (".gitignore", "UNSUPPORTED_FILE_TYPE"),
+        ("src/pkg/.env.example", "UNSUPPORTED_FILE_TYPE"),
+    ]
 
 
 @pytest.mark.skipif(not SYMLINKS, reason="needs symlink support")
@@ -135,13 +161,13 @@ def test_submodule_bump_is_modified_and_skipped(api, make_repo):
     assert skipped(body) == [("vendor/lib", "UNSUPPORTED_FILE_TYPE")]
 
 
-def test_hidden_submodule_stays_ignored(api, make_repo):
+def test_hidden_submodule_is_listed_and_skipped_by_name(api, make_repo):
     repo = make_repo()
     repo.commit({"seed": "0\n"})
     head = repo.commit({"real.txt": "r\n"}, gitlinks={".vendor/lib": "1" * 40})
     body = analyse(api, head)
-    assert listing(body) == [("real.txt", "ADDED", None)]
-    assert skipped(body) == []
+    assert listing(body) == [(".vendor/lib", "ADDED", None), ("real.txt", "ADDED", None)]
+    assert skipped(body) == [(".vendor/lib", "UNSUPPORTED_FILE_TYPE")]
 
 
 def test_executable_file_is_kept(api, make_repo):
@@ -151,18 +177,30 @@ def test_executable_file_is_kept(api, make_repo):
     assert listing(analyse(api, head)) == [("run.sh", "ADDED", None)]
 
 
-def test_rename_out_of_a_hidden_folder_is_added(api, make_repo):
+def test_rename_out_of_a_hidden_folder_is_renamed(api, make_repo):
     repo = make_repo()
     repo.commit({".github/a.md": TEXT})
     head = repo.commit({".github/a.md": None, "docs/a.md": TEXT})
-    assert listing(analyse(api, head)) == [("docs/a.md", "ADDED", None)]
+    assert listing(analyse(api, head)) == [("docs/a.md", "RENAMED", ".github/a.md")]
 
 
-def test_rename_into_a_hidden_folder_is_deleted(api, make_repo):
+def test_rename_into_a_hidden_folder_is_renamed(api, make_repo):
     repo = make_repo()
     repo.commit({"docs/x.md": TEXT})
     head = repo.commit({"docs/x.md": None, ".archive/x.md": TEXT})
-    assert listing(analyse(api, head)) == [("docs/x.md", "DELETED", None)]
+    assert listing(analyse(api, head)) == [(".archive/x.md", "RENAMED", "docs/x.md")]
+
+
+def test_hidden_modifications_and_deletions_are_reported(api, make_repo):
+    repo = make_repo()
+    repo.commit({".github/workflows/ci.yaml": "name: before\n", "docs/.cache/gone.md": "gone\n"})
+    head = repo.commit({".github/workflows/ci.yaml": "name: after\n", "docs/.cache/gone.md": None})
+    body = analyse(api, head)
+    assert listing(body) == [
+        (".github/workflows/ci.yaml", "MODIFIED", None),
+        ("docs/.cache/gone.md", "DELETED", None),
+    ]
+    assert skipped(body) == []
 
 
 @pytest.mark.skipif(not SYMLINKS, reason="needs symlink support")
