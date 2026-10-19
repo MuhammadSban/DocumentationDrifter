@@ -20,6 +20,14 @@ testbench/
 
 Start with [DEMO.md](DEMO.md). From the repository root, run `python testbench/run_testbench.py --mode local`, then open the HTML report whose path is printed. Historical reports retain the exact commands and paths used before the files were moved; new runs record the new paths.
 
+## Open the test bench frontend
+
+```powershell
+.\.venv\Scripts\python.exe testbench/serve_testbench.py
+```
+
+Open **http://127.0.0.1:8765** to select a test mode, watch execution, filter results, browse previous runs and download evidence. This dashboard is separate from the application's watch-list console. See [the frontend guide](frontend/README.md) for setup and demonstration steps.
+
 ## Install
 
 Use Python 3.12 or newer and Git, from the repository root:
