@@ -58,14 +58,8 @@ def slot() -> threading.BoundedSemaphore:
 def analyze(request: AnalysisRequest) -> AnalysisResult:
     # runs one analysis in a slot, starting the deadline only once the slot is free
     validate(request)
-    settings, slots = get_settings(), slot()
-    if not slots.acquire(timeout=settings.slot_wait):
-        message = f"No analysis slot came free within {settings.slot_wait:g} s, try again later"
-        raise AnalysisError(ErrorCode.TIMEOUT, message)
-    try:
-        return _analyze(request, time.monotonic() + settings.analysis_deadline)
-    finally:
-        slots.release()
+    with slot():
+        return _analyze(request, time.monotonic() + get_settings().analysis_deadline)
 
 
 def _analyze(request: AnalysisRequest, deadline: float) -> AnalysisResult:

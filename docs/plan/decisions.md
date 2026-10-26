@@ -280,11 +280,9 @@ Grilled before building v1.2's one slice. Twenty questions; the answers below ar
 - **Listed in the `/system` route list**, so a person who opens plain `/system` finds it.
 - **Left for a complete solution:** the page loads Swagger UI's scripts from a public CDN (jsDelivr), so it renders blank offline or where that CDN is blocked. Serving the assets from the image would fix it.
 
-## Closing LIM-04 and LIM-08 from the Phase 3 report, 2026-10-25
+## Closing LIM-08 from the Phase 3 report, 2026-10-25
 
-- **A capped wait for a slot (LIM-04).** A request waits at most `DRIFTER_SLOT_WAIT` (120 s) for one of the analysis slots, then fails with 500 `TIMEOUT` and saves nothing. Before, it waited forever, so stuck analyses made every later request hang (the live service stopped answering on 18 October). The wait has its own setting rather than counting against the analysis deadline, so a queued request still gets its full 120 s once it starts (ticket 08's rule).
 - **`INTERNAL_ERROR` for the unforeseen (LIM-08, Kaan).** Any exception no handler foresaw, such as an unexpected git failure or a saved run that can't be read, now answers 500 `{"code": "INTERNAL_ERROR", "message": ...}` instead of a bare plain-text 500. The course routes answer in their own `{"message", "source"}` shape. No contract code fits, and reusing `TIMEOUT` or `WRITE_FAILED` would mislead a caller, so it is ours, like `LLM_UNAVAILABLE`, and goes to the pod with it.
-- **Left for a complete solution:** the slot wait stops later requests hanging but doesn't free a slot held by an analysis that is itself stuck; the cause of 18 October's hang is still unconfirmed.
 
 ## Still open
 

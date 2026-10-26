@@ -29,7 +29,7 @@ python -m pytest -q            # DRIFTER_OFFLINE=1 skips the GitHub tests
 
 **Container:** `docker build -t drifter .` then `docker run -p 8000:8000 drifter`. The image has git, no credentials, and serves only the v1 app.
 
-**Settings** (environment): `GEMINI_API_KEY` is required for any analysis that reaches the drift check; without it those fail with `LLM_UNAVAILABLE`. Optional: `DRIFTER_REMOTE_BASE_URL`, `DRIFTER_RUNS_DIR`, `DRIFTER_CLONE_DIR`, `DRIFTER_RULES_FILE`, `DRIFTER_GIT_TIMEOUT` (60 s), `DRIFTER_ANALYSIS_DEADLINE` (120 s), `DRIFTER_MAX_CONCURRENT` (2), `DRIFTER_SLOT_WAIT` (120 s), `DRIFTER_MAX_FILE_BYTES` (1 MB), `DRIFTER_DOC_BUDGET_BYTES` (200 KB), `DRIFTER_LLM_MODEL`.
+**Settings** (environment): `GEMINI_API_KEY` is required for any analysis that reaches the drift check; without it those fail with `LLM_UNAVAILABLE`. Optional: `DRIFTER_REMOTE_BASE_URL`, `DRIFTER_RUNS_DIR`, `DRIFTER_CLONE_DIR`, `DRIFTER_RULES_FILE`, `DRIFTER_GIT_TIMEOUT` (60 s), `DRIFTER_ANALYSIS_DEADLINE` (120 s), `DRIFTER_MAX_CONCURRENT` (2), `DRIFTER_MAX_FILE_BYTES` (1 MB), `DRIFTER_DOC_BUDGET_BYTES` (200 KB), `DRIFTER_LLM_MODEL`.
 
 **Public URL:** https://documentationdrifter-production.up.railway.app/system, on Railway's free plan (`railway.toml`: Dockerfile build, `/system/health` health check). Every push to `main` redeploys it. The service is always on; `GET /system/health` is still the quickest way to check it is up.
 
@@ -39,5 +39,5 @@ python -m pytest -q            # DRIFTER_OFFLINE=1 skips the GitHub tests
 - **About 20 AI-checked analyses a day for everyone.** The drift check runs on Gemini's free tier (5 requests a minute, 20 a day). Past that, analyses that need it fail with 500 `LLM_UNAVAILABLE` until midnight Pacific time. A change with no code, or a repo with no docs, makes no call.
 - **Findings are unmeasured suggestions.** They can differ between runs, only contradicted documentation is reported (not missing documentation), and there is no way yet to confirm or dismiss one.
 - **Your code and docs go to Google.** The changed files and the documentation are sent to Gemini's free tier, where Google may use them. Only analyse repos you are happy to share.
-- **Waiting is capped.** At most 2 analyses run at once; a request waits up to 120 s for a slot, then fails with 500 `TIMEOUT`. Each analysis is stopped 120 s after it starts.
+- **Waiting has no limit.** At most 2 analyses run at once, and a request waiting for a slot has no time limit, so if analyses get stuck, later requests hang. Set a client timeout and check `GET /system/health`. Each analysis is stopped 120 s after it starts.
 - **Not everything is checked.** Only the first 200 KB of documentation is sent (the rest is `OVER_DOC_BUDGET` in `skipped[]`); files over 1 MB, binary or non-UTF-8 files are skipped; hidden paths are ignored; only public repos work.
