@@ -23,6 +23,7 @@ New to the project? Start with the [v1.1 guide](Models/v1/v1.1/v1.1-guide.html),
 | What exactly must v1.1 do? | [Models/v1/v1.1/spec-v1.1.md](Models/v1/v1.1/spec-v1.1.md) |
 | How does v1.2's drift check work? | "Wiring the LLM drift check" in [plan/decisions.md](plan/decisions.md) |
 | What are the deployed service's limits? | "Known limitations" in the [README](../README.md) |
+| How do I run the cross-team tester? | "Cross-team tester" in the [README](../README.md); the rules it follows are the course's "Cross-team Testing Interface" document |
 | Why was something decided? | [plan/decisions.md](plan/decisions.md), and the decisions table at the end of the roadmap |
 | What are the exact rules the code must match? | [Models/v1/](Models/v1/README.md), M1 to M5 |
 | Which file holds a model's box? | "From boxes to files" in [Models/v1/README.md](Models/v1/README.md) |
