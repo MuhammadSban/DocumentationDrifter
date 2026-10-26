@@ -273,10 +273,23 @@ Grilled before building v1.2's one slice. Twenty questions; the answers below ar
 - **The key (Q18).** The key pasted into `llm.py` never reached a commit (`git log -S` across all 94), so the line was deleted and the key not rotated. It lives in `.env`, which is gitignored and which `tests/conftest.py` now loads.
 - **Deferred by choice (Q20).** The public test repo keeps its empty `planted_drift`, so AC-02 and AC-03 stay open for a follow-up ticket rather than putting a wiring change and a test-repo republish in one branch.
 
+## Interactive API docs at `/system/docs`, 2026-10-25
+
+- **Reverses v1.1's "no docs pages" (Kaan).** The v1 app now serves Swagger UI at `/system/docs`. Graders and podmates need a page to read and try the API without writing a client; the OpenAPI document alone wasn't enough.
+- **Under `/system`, out of the contract.** FastAPI leaves the docs route out of `/system/openapi.json`, so the conformance comparison with the pod's description is unchanged. ReDoc stays off, and the OAuth2 redirect route is dropped because it would sit at the unprefixed `/docs/oauth2-redirect`.
+- **Listed in the `/system` route list**, so a person who opens plain `/system` finds it.
+- **Left for a complete solution:** the page loads Swagger UI's scripts from a public CDN (jsDelivr), so it renders blank offline or where that CDN is blocked. Serving the assets from the image would fix it.
+
+## Closing LIM-04 and LIM-08 from the Phase 3 report, 2026-10-25
+
+- **A capped wait for a slot (LIM-04).** A request waits at most `DRIFTER_SLOT_WAIT` (120 s) for one of the analysis slots, then fails with 500 `TIMEOUT` and saves nothing. Before, it waited forever, so stuck analyses made every later request hang (the live service stopped answering on 18 October). The wait has its own setting rather than counting against the analysis deadline, so a queued request still gets its full 120 s once it starts (ticket 08's rule).
+- **`INTERNAL_ERROR` for the unforeseen (LIM-08, Kaan).** Any exception no handler foresaw, such as an unexpected git failure or a saved run that can't be read, now answers 500 `{"code": "INTERNAL_ERROR", "message": ...}` instead of a bare plain-text 500. The course routes answer in their own `{"message", "source"}` shape. No contract code fits, and reusing `TIMEOUT` or `WRITE_FAILED` would mislead a caller, so it is ours, like `LLM_UNAVAILABLE`, and goes to the pod with it.
+- **Left for a complete solution:** the slot wait stops later requests hanging but doesn't free a slot held by an analysis that is itself stuck; the cause of 18 October's hang is still unconfirmed.
+
 ## Still open
 
 - ~~**Skipped files, skip reasons and hidden paths**~~: decided that evening (T12-Q1, T12-Q2, T12-Q8 and T12-Q9). Still to ask the pod: their full list of unsupported file types, and whether they ever skip by content.
 - **`/test` endpoints:** built from what the reference service was seen to do (above); the pod still has to confirm the semantics.
-- **Unexpected git failures:** a git call that fails in a way the connector doesn't foresee (not a timeout, a missing repository or an unknown commit) returns FastAPI's plain-text 500 instead of an `ErrorBody`, and none of the five contract codes fits. Ask the pod what code their service uses (Kaan, 2026-10-17); asked in [pod-report-2026-10-17.md](reports/pod-report-2026-10-17.md), still to settle once they answer.
+- **Unexpected git failures:** answered on our side by `INTERNAL_ERROR` (2026-10-25, above). Still to ask the pod to add it, with `LLM_UNAVAILABLE`, or to switch to their code once they answer [pod-report-2026-10-17.md](reports/pod-report-2026-10-17.md).
 - **Repository pattern:** [M0](history/M0-build-order.pdf) uses `^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[\w.-]{1,100}$`, stricter than the spec's `^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$`. The spec's pattern stays until the conformance run shows what the reference service accepts (Kaan, 2026-10-17). Update, later that day: the reference's captured OpenAPI document declares M0's pattern, `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$`. The conformance case `not-a-repo` gives the same 400 under both patterns; names the two patterns disagree on (a leading hyphen, an owner over 39 characters, a name over 100) haven't been compared yet.
 - **First audit for a new repo (decision 15):** when the default branch is first created at a root commit, should the Action ask for a first audit instead of skipping? Proposed in the decision 15 section above, not decided.

@@ -46,6 +46,9 @@ class AnalysisSettings(BaseSettings):
     # runs at most this many analyses at once, extra requests wait for a slot
     max_concurrent: int = 2
 
+    # caps the wait for a slot, past it the request ends in 500 TIMEOUT instead of hanging
+    slot_wait: float = 120
+
     # names the model the drift check asks, a provider switch is a config change (roadmap v1.2)
     llm_model: str = "gemini-3.8-flash"
 
