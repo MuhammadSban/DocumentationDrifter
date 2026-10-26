@@ -1,13 +1,17 @@
 # DocumentationDrifter
 A program to detect documentation drift in a GitHub repo. Designed for ECE30861 Class Project. 
 
-v1.1 is built: given a public repo and two commits, it lists every changed file with its change type and category. v1.2, an LLM that flags documentation the change may have outdated, is not started.
+v1.1 and v1.2 are built and deployed. Given a public repo and two commits, v1.1 lists every changed file with its change type and category. v1.2 then asks Google Gemini which documentation the changed code contradicts, and returns each finding in `issues[]` marked `PENDING_REVIEW`; its findings can vary between runs and their accuracy has not been measured.
 
 **Start here:** [docs/README.md](docs/README.md) is the map of the documentation, with the order to read it in. The words used are defined in [CONTEXT.md](CONTEXT.md), the house rules are in [AGENTS.md](AGENTS.md), and the open review items are in [.scratch/v1-1-change-detection/to_do.md](.scratch/v1-1-change-detection/to_do.md).
 
-## v1.1 change detection API
+## v1 API
 
-`POST /system/analyze` takes `{"repository": "owner/name", "commit_id": "<7-40 hex>", "base_commit": "<optional>"}` and returns every changed file of a public GitHub repo with its change type and category. `GET /system/analysis/{analysis_id}` returns the saved run byte for byte. The contract matches the reference service; see `docs/Models/v1/v1.1/spec-v1.1.md`.
+`POST /system/analyze` takes `{"repository": "owner/name", "commit_id": "<7-40 hex>", "base_commit": "<optional>"}` and returns every changed file of a public GitHub repo with its change type and category, plus the drift findings in `issues[]`. `GET /system/analysis/{analysis_id}` returns the saved run byte for byte. The contract is the pod's API description (OpenAPI 0.3.0); see `docs/Models/v1/v1.1/spec-v1.1.md` for change detection and the "Wiring the LLM drift check" section of [the decision log](docs/plan/decisions.md) for the drift check.
+
+**Errors.** Every failure answers with `{"code", "message"}`: 400 `INVALID_REQUEST`, 404 `REPOSITORY_NOT_FOUND` or `COMMIT_NOT_FOUND`, and 500 `TIMEOUT`, `WRITE_FAILED`, `LLM_UNAVAILABLE` (the drift check failed) or `INTERNAL_ERROR` (anything unforeseen). The last two are ours, not yet in the pod's contract. A failed request saves nothing.
+
+**API docs.** `/system/docs` is an interactive Swagger UI page for every route; the machine-readable description is `/system/openapi.json`.
 
 **Route list.** Opening plain `/system` returns the list of routes. The reference service has no such route; it stays out of the OpenAPI document.
 
@@ -25,8 +29,15 @@ python -m pytest -q            # DRIFTER_OFFLINE=1 skips the GitHub tests
 
 **Container:** `docker build -t drifter .` then `docker run -p 8000:8000 drifter`. The image has git, no credentials, and serves only the v1 app.
 
-**Settings** (environment, all optional): `DRIFTER_REMOTE_BASE_URL`, `DRIFTER_RUNS_DIR`, `DRIFTER_CLONE_DIR`, `DRIFTER_RULES_FILE`, `DRIFTER_GIT_TIMEOUT` (60 s), `DRIFTER_ANALYSIS_DEADLINE` (120 s), `DRIFTER_MAX_CONCURRENT` (2), `DRIFTER_MAX_FILE_BYTES` (1 MB).
+**Settings** (environment): `GEMINI_API_KEY` is required for any analysis that reaches the drift check; without it those fail with `LLM_UNAVAILABLE`. Optional: `DRIFTER_REMOTE_BASE_URL`, `DRIFTER_RUNS_DIR`, `DRIFTER_CLONE_DIR`, `DRIFTER_RULES_FILE`, `DRIFTER_GIT_TIMEOUT` (60 s), `DRIFTER_ANALYSIS_DEADLINE` (120 s), `DRIFTER_MAX_CONCURRENT` (2), `DRIFTER_MAX_FILE_BYTES` (1 MB), `DRIFTER_DOC_BUDGET_BYTES` (200 KB), `DRIFTER_LLM_MODEL`.
 
-**Public URL:** being set up on Railway's free plan (`railway.toml`: Dockerfile build, `/system/health` health check).
+**Public URL:** https://documentationdrifter-production.up.railway.app/system, on Railway's free plan (`railway.toml`: Dockerfile build, `/system/health` health check). Every push to `main` redeploys it. The service is always on; `GET /system/health` is still the quickest way to check it is up.
 
-**Free tier, read before reporting a bug.** Call `GET /system/health` first: the free service sleeps after about 5 to 10 minutes without traffic, and the first request after that can take a moment or answer 502. Run files live on local disk, which is wiped on every redeploy and restart, so a `GET` for an old run can return 404 on both teams' services. That is expected until v3 adds durable storage.
+## Known limitations
+
+- **Saved runs are temporary.** Run files live on local disk, which is wiped on every restart and redeploy, so a `GET` for an old run can return 404. Fetch a run right after creating it and keep your own copy. Durable storage is a later version.
+- **About 20 AI-checked analyses a day for everyone.** The drift check runs on Gemini's free tier (5 requests a minute, 20 a day). Past that, analyses that need it fail with 500 `LLM_UNAVAILABLE` until midnight Pacific time. A change with no code, or a repo with no docs, makes no call.
+- **Findings are unmeasured suggestions.** They can differ between runs, only contradicted documentation is reported (not missing documentation), and there is no way yet to confirm or dismiss one.
+- **Your code and docs go to Google.** The changed files and the documentation are sent to Gemini's free tier, where Google may use them. Only analyse repos you are happy to share.
+- **Waiting has no limit.** At most 2 analyses run at once, and a request waiting for a slot has no time limit, so if analyses get stuck, later requests hang. Set a client timeout and check `GET /system/health`. Each analysis is stopped 120 s after it starts.
+- **Not everything is checked.** Only the first 200 KB of documentation is sent (the rest is `OVER_DOC_BUDGET` in `skipped[]`); files over 1 MB, binary or non-UTF-8 files are skipped; hidden paths are ignored; only public repos work.

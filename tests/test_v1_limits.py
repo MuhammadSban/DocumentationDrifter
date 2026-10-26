@@ -1,4 +1,4 @@
-# covers ticket 08: TIMEOUT, the concurrency cap and WRITE_FAILED
+# covers ticket 08: TIMEOUT, the concurrency cap and WRITE_FAILED, plus INTERNAL_ERROR
 
 import sys
 import threading
@@ -113,3 +113,39 @@ def test_success_always_means_the_run_can_be_fetched(api, head):
     r = analyse(api, head)
     assert r.status_code == 200
     assert api.get(f"/system/analysis/{r.json()['analysis_id']}").content == r.content
+
+
+@pytest.fixture
+def lenient_api(v1_env):
+    # builds a test client that returns the 500 response instead of re-raising the server's exception
+    from fastapi.testclient import TestClient
+
+    from GitHub_Connector.api import app
+
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def test_unforeseen_git_failure_gives_internal_error(lenient_api, head, v1_env, monkeypatch):
+    import subprocess
+
+    from GitHub_Connector import analysis
+
+    def broken(*args, **kwargs):
+        raise subprocess.CalledProcessError(128, ["git", "fetch"], b"", b"fatal: unexpected")
+
+    monkeypatch.setattr(analysis, "fetch", broken)
+    r = analyse(lenient_api, head)
+    assert_failed(r, "INTERNAL_ERROR", v1_env)
+    assert r.headers["content-type"] == "application/json"
+
+
+def test_unreadable_saved_run_gives_internal_error(lenient_api, monkeypatch):
+    from GitHub_Connector import runs
+
+    def broken(analysis_id):
+        raise PermissionError("run file unreadable")
+
+    monkeypatch.setattr(runs, "load", broken)
+    r = lenient_api.get("/system/analysis/an-" + "0" * 32)
+    assert r.status_code == 500
+    assert r.json() == {"code": "INTERNAL_ERROR", "message": "the request failed unexpectedly"}

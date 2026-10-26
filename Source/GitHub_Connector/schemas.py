@@ -41,13 +41,14 @@ class IssueType(str, Enum):
 
 
 class ErrorCode(str, Enum):
-    # lists the contract's failure codes, LLM_UNAVAILABLE is ours beyond the pod's
+    # lists the contract's failure codes, LLM_UNAVAILABLE and INTERNAL_ERROR are ours beyond the pod's
     INVALID_REQUEST = "INVALID_REQUEST"
     REPOSITORY_NOT_FOUND = "REPOSITORY_NOT_FOUND"
     COMMIT_NOT_FOUND = "COMMIT_NOT_FOUND"
     TIMEOUT = "TIMEOUT"
     WRITE_FAILED = "WRITE_FAILED"
     LLM_UNAVAILABLE = "LLM_UNAVAILABLE"
+    INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
 class AnalysisRequest(BaseModel):

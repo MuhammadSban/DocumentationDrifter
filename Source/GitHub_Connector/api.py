@@ -26,6 +26,7 @@ STATUS_FOR = {
     ErrorCode.TIMEOUT: 500,
     ErrorCode.WRITE_FAILED: 500,
     ErrorCode.LLM_UNAVAILABLE: 500,
+    ErrorCode.INTERNAL_ERROR: 500,
 }
 
 
@@ -34,8 +35,9 @@ _ERRORS = {400: {"model": ErrorBody}, 404: {"model": ErrorBody}, 500: {"model": 
 app = FastAPI(
     title="DocumentationDrifter",
     openapi_url="/system/openapi.json",
-    docs_url=None,  # serves the contract's routes and the console, no docs pages
+    docs_url="/system/docs",  # serves Swagger UI under /system, kept out of the OpenAPI document by FastAPI
     redoc_url=None,
+    swagger_ui_oauth2_redirect_url=None,  # drops the unprefixed /docs/oauth2-redirect route, no OAuth here
 )
 router = APIRouter(prefix="/system")
 
@@ -52,6 +54,15 @@ def _json(data: bytes, status: int = 200) -> Response:
 def _analysis_error(_, exc: AnalysisError) -> JSONResponse:
     # turns a failed analysis into its status and an ErrorBody
     return JSONResponse(status_code=STATUS_FOR[exc.code], content=exc.body().model_dump(mode="json"))
+
+
+@app.exception_handler(Exception)
+def _unexpected(request: Request, exc: Exception) -> JSONResponse:
+    # answers any failure nothing else foresaw with a body, never a bare plain-text 500
+    if request.url.path.startswith(router.prefix + course.router.prefix + "/"):
+        return course.course_error(500, "the request failed unexpectedly")
+    err = AnalysisError(ErrorCode.INTERNAL_ERROR, "the request failed unexpectedly")
+    return _analysis_error(None, err)
 
 
 @app.exception_handler(RequestValidationError)
@@ -98,6 +109,7 @@ def index() -> dict:
     return {
         "service": "DocumentationDrifter",
         "routes": [
+            "GET /system/docs",
             "GET /system/health",
             "POST /system/analyze",
             "GET /system/analysis/{analysis_id}",

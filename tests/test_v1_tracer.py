@@ -184,9 +184,17 @@ def test_analyze_works_without_http(api, make_repo):
     assert strip(json.loads(direct.model_dump_json())) == strip(over_http)
 
 
-def test_only_the_contract_routes_are_served(api):
-    for path in ("/system/docs", "/docs", "/redoc", "/system/redoc"):
+def test_the_docs_page_is_served_under_system_only(api):
+    # serves Swagger UI at /system/docs, every other docs path stays 404
+    r = api.get("/system/docs")
+    assert r.status_code == 200 and "swagger-ui" in r.text
+    for path in ("/docs", "/redoc", "/system/redoc", "/docs/oauth2-redirect"):
         assert api.get(path).status_code == 404, path
+
+
+def test_the_docs_page_stays_out_of_the_openapi_document(api, v1_env):
+    # keeps the schema comparison with the reference service unaffected
+    assert "/system/docs" not in api.get("/system/openapi.json").json()["paths"]
 
 
 def test_the_prefix_itself_lists_the_routes(api, v1_env):
@@ -196,6 +204,7 @@ def test_the_prefix_itself_lists_the_routes(api, v1_env):
     body = r.json()
     assert body["service"] == "DocumentationDrifter"
     assert body["routes"] == [
+        "GET /system/docs",
         "GET /system/health",
         "POST /system/analyze",
         "GET /system/analysis/{analysis_id}",
