@@ -1,7 +1,7 @@
 # DocumentationDrifter
 A program to detect documentation drift in a GitHub repo. Designed for ECE30861 Class Project. 
 
-v1.1 and v1.2 are built and deployed. Given a public repo and two commits, v1.1 lists every changed file with its change type and category. v1.2 then asks Google Gemini which documentation the changed code contradicts, and returns each finding in `issues[]` marked `PENDING_REVIEW`; its findings can vary between runs and their accuracy has not been measured.
+v1.1 and v1.2 are built and deployed. Given a public repo and two commits, v1.1 lists every changed file with its change type and category. v1.2 then asks Google Gemini which documentation the changed code contradicts, and returns each finding in `issues[]` marked `PENDING_REVIEW`; its findings can vary between runs and their accuracy has not been measured. The same service also runs the course's cross-team tester at `/tester`, which runs the pod's shared tests against any team's system.
 
 **Start here:** [docs/README.md](docs/README.md) is the map of the documentation, with the order to read it in. The words used are defined in [CONTEXT.md](CONTEXT.md), the house rules are in [AGENTS.md](AGENTS.md), and the open review items are in [.scratch/v1-1-change-detection/to_do.md](.scratch/v1-1-change-detection/to_do.md).
 
@@ -25,15 +25,15 @@ v1.1 and v1.2 are built and deployed. Given a public repo and two commits, v1.1 
 
 ```bash
 pip install -r requirements.txt
-uvicorn --app-dir Source GitHub_Connector.api:app --port 8000
+uvicorn --app-dir Source GitHub_Connector.api:app --port 8000   # system at /system, tester at /tester, console at /
 python -m pytest -q            # DRIFTER_OFFLINE=1 skips the GitHub tests
 ```
 
-**Container:** `docker build -t drifter .` then `docker run -p 8000:8000 drifter`. The image has git, no credentials, and serves only the v1 app.
+**Container:** `docker build -t drifter .` then `docker run -p 8000:8000 drifter`. The image has git, no credentials, and serves the v1 app: the system, the tester and the console.
 
-**Settings** (environment): `GEMINI_API_KEY` is required for any analysis that reaches the drift check; without it those fail with `LLM_UNAVAILABLE`. Optional: `DRIFTER_REMOTE_BASE_URL`, `DRIFTER_RUNS_DIR`, `DRIFTER_CLONE_DIR`, `DRIFTER_RULES_FILE`, `DRIFTER_GIT_TIMEOUT` (60 s), `DRIFTER_ANALYSIS_DEADLINE` (120 s), `DRIFTER_MAX_CONCURRENT` (2), `DRIFTER_MAX_FILE_BYTES` (1 MB), `DRIFTER_DOC_BUDGET_BYTES` (200 KB), `DRIFTER_LLM_MODEL`.
+**Settings** (environment): `GEMINI_API_KEY` is required for any analysis that reaches the drift check; without it those fail with `LLM_UNAVAILABLE`. Optional: `DRIFTER_REMOTE_BASE_URL`, `DRIFTER_RUNS_DIR`, `DRIFTER_CLONE_DIR`, `DRIFTER_RULES_FILE`, `DRIFTER_GIT_TIMEOUT` (60 s), `DRIFTER_ANALYSIS_DEADLINE` (120 s), `DRIFTER_MAX_CONCURRENT` (2), `DRIFTER_MAX_FILE_BYTES` (1 MB), `DRIFTER_DOC_BUDGET_BYTES` (200 KB), `DRIFTER_LLM_MODEL`. The tester reads `TESTER_CALL_TIMEOUT` (90 s per call to the target) and `TESTER_SUITE_TIMEOUT` (600 s per run).
 
-**Public URL:** https://documentationdrifter-production.up.railway.app/system, on Railway's free plan (`railway.toml`: Dockerfile build, `/system/health` health check). Every push to `main` redeploys it. The service is always on; `GET /system/health` is still the quickest way to check it is up.
+**Public URLs** (the base URLs in the course's endpoint registry): the system at https://documentationdrifter-production.up.railway.app/system and the tester at https://documentationdrifter-production.up.railway.app/tester, both on Railway's free plan (`railway.toml`: Dockerfile build, `/system/health` health check). Every push to `main` redeploys it. The service is always on; `GET /system/health` is still the quickest way to check it is up.
 
 ## Known limitations
 
@@ -42,4 +42,6 @@ python -m pytest -q            # DRIFTER_OFFLINE=1 skips the GitHub tests
 - **Findings are unmeasured suggestions.** They can differ between runs, only contradicted documentation is reported (not missing documentation), and there is no way yet to confirm or dismiss one.
 - **Your code and docs go to Google.** The changed files and the documentation are sent to Gemini's free tier, where Google may use them. Only analyse repos you are happy to share.
 - **Waiting has no limit.** At most 2 analyses run at once, and a request waiting for a slot has no time limit, so if analyses get stuck, later requests hang. Set a client timeout and check `GET /system/health`. Each analysis is stopped 120 s after it starts.
+- **Tester sessions are temporary too.** Tester sessions and their reports live in memory, so a restart or redeploy forgets them and `GET /tester/test/report` returns 404. Each session runs once; set up a new one to repeat the suite.
+- **A tester run against our system needs Gemini quota.** It makes about 15 analyses in about 30 s, most of which reach the drift check, which is more than the free tier's 5 a minute; those analyses fail with `LLM_UNAVAILABLE` and their tests show as errors.
 - **Not everything is checked.** Only the first 200 KB of documentation is sent (the rest is `OVER_DOC_BUDGET` in `skipped[]`); files over 1 MB, binary or non-UTF-8 files are skipped; hidden paths are ignored; only public repos work.
