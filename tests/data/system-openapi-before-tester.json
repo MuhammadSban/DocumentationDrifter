@@ -1,0 +1,569 @@
+{
+  "index": {
+    "routes": [
+      "GET /system/docs",
+      "GET /system/health",
+      "POST /system/analyze",
+      "GET /system/analysis/{analysis_id}",
+      "POST /system/test/setup",
+      "GET /system/test/report?session_id=..."
+    ],
+    "service": "DocumentationDrifter"
+  },
+  "paths": {
+    "/system/analysis/{analysis_id}": {
+      "get": {
+        "operationId": "get_analysis_system_analysis__analysis_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Analysis"
+      }
+    },
+    "/system/analyze": {
+      "post": {
+        "operationId": "post_analyze_system_analyze_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalysisRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Post Analyze"
+      }
+    },
+    "/system/health": {
+      "get": {
+        "operationId": "health_system_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health System Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/system/test/report": {
+      "get": {
+        "operationId": "test_report_system_test_report_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Report",
+        "tags": [
+          "testing"
+        ]
+      }
+    },
+    "/system/test/setup": {
+      "post": {
+        "operationId": "test_setup_system_test_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestSetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Setup",
+        "tags": [
+          "testing"
+        ]
+      }
+    }
+  },
+  "schemas": {
+    "AnalysisRequest": {
+      "properties": {
+        "base_commit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Base Commit"
+        },
+        "commit_id": {
+          "title": "Commit Id",
+          "type": "string"
+        },
+        "repository": {
+          "title": "Repository",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "commit_id"
+      ],
+      "title": "AnalysisRequest",
+      "type": "object"
+    },
+    "AnalysisResult": {
+      "properties": {
+        "analysis_id": {
+          "title": "Analysis Id",
+          "type": "string"
+        },
+        "base_commit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Base Commit"
+        },
+        "changes": {
+          "items": {
+            "$ref": "#/components/schemas/Change"
+          },
+          "title": "Changes",
+          "type": "array"
+        },
+        "config_version": {
+          "title": "Config Version",
+          "type": "string"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/ErrorBody"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "head_commit": {
+          "title": "Head Commit",
+          "type": "string"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/components/schemas/Finding"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "repository": {
+          "title": "Repository",
+          "type": "string"
+        },
+        "skipped": {
+          "items": {
+            "$ref": "#/components/schemas/Skipped"
+          },
+          "title": "Skipped",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Status"
+        },
+        "tool_version": {
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "analysis_id",
+        "repository",
+        "head_commit",
+        "base_commit",
+        "config_version",
+        "tool_version",
+        "status",
+        "error",
+        "issues",
+        "changes",
+        "skipped",
+        "created_at"
+      ],
+      "title": "AnalysisResult",
+      "type": "object"
+    },
+    "Category": {
+      "enum": [
+        "IMPLEMENTATION",
+        "DESIGN",
+        "ARCHITECTURE",
+        "SPECIFICATION",
+        "REQUIREMENT",
+        "DOCUMENTATION",
+        "OTHER"
+      ],
+      "title": "Category",
+      "type": "string"
+    },
+    "Change": {
+      "properties": {
+        "category": {
+          "$ref": "#/components/schemas/Category"
+        },
+        "change_type": {
+          "$ref": "#/components/schemas/ChangeType"
+        },
+        "old_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Old Path"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "change_type",
+        "category"
+      ],
+      "title": "Change",
+      "type": "object"
+    },
+    "ChangeType": {
+      "enum": [
+        "ADDED",
+        "MODIFIED",
+        "DELETED",
+        "RENAMED",
+        "COPIED",
+        "TYPE_CHANGED"
+      ],
+      "title": "ChangeType",
+      "type": "string"
+    },
+    "ErrorBody": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "ErrorBody",
+      "type": "object"
+    },
+    "Finding": {
+      "properties": {
+        "change_category": {
+          "$ref": "#/components/schemas/Category"
+        },
+        "code_file": {
+          "title": "Code File",
+          "type": "string"
+        },
+        "documentation_file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Documentation File"
+        },
+        "explanation": {
+          "title": "Explanation",
+          "type": "string"
+        },
+        "finding_id": {
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "issue_type": {
+          "title": "Issue Type",
+          "type": "string"
+        },
+        "verification_status": {
+          "title": "Verification Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "finding_id",
+        "issue_type",
+        "code_file",
+        "documentation_file",
+        "change_category",
+        "explanation",
+        "verification_status"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "HTTPValidationError": {
+      "properties": {
+        "detail": {
+          "items": {
+            "$ref": "#/components/schemas/ValidationError"
+          },
+          "title": "Detail",
+          "type": "array"
+        }
+      },
+      "title": "HTTPValidationError",
+      "type": "object"
+    },
+    "Skipped": {
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "reason"
+      ],
+      "title": "Skipped",
+      "type": "object"
+    },
+    "Status": {
+      "enum": [
+        "SUCCESS",
+        "ERROR"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "TestSetupRequest": {
+      "properties": {
+        "session_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Session Id",
+          "type": "string"
+        },
+        "setup": {
+          "additionalProperties": true,
+          "title": "Setup",
+          "type": "object"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "title": "TestSetupRequest",
+      "type": "object"
+    },
+    "ValidationError": {
+      "properties": {
+        "loc": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          },
+          "title": "Location",
+          "type": "array"
+        },
+        "msg": {
+          "title": "Message",
+          "type": "string"
+        },
+        "type": {
+          "title": "Error Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "loc",
+        "msg",
+        "type"
+      ],
+      "title": "ValidationError",
+      "type": "object"
+    }
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "about": "The shared change tests T-01 to T-07, copied from Team 16's tester (ParthGupta06/doc-tracker, doctracker/tester/suite.py and commits.json at 0db21ca, read 2026-10-18). Team 16 agrees only to what their suite checks, so every expected answer here is theirs. T-07 checks only the base, the count and that every change is ADDED; its paths are listed for reference.",
+  "repository": "ParthGupta06/doc-tracker-fixtures",
+  "fixture_version": "fixtures-v1",
+  "commits": {
+    "c0-initial": "d19092e138ea3f9788a8eac76005ee53d22940da",
+    "c1-impl-only": "add930c827b4f242d173fe6d26ebc068c8dd65fb",
+    "c2-add-mod-del": "332e59e3ba2b1a6c1a454ee75c3a71dfea0b4ff6",
+    "c3-rename": "9b03117ff9c5bfcaeb49eedfccd04aa07547ed49",
+    "c4-categories": "55e4b15ba4ce0a9e0923bffe1335c013b7c6ae07",
+    "c5-docs-only": "807e7bbc587d8a04731a850546e6acdb175a4392",
+    "c6-binary": "8adab1b196fab4a522459716d96f2942665b222c",
+    "c7-code-and-doc": "cb9fd8c094a53c99aec7203c12bc396f0b9bfac6",
+    "c8-missing-doc": "912b0b88a52b14c5be2accffb5c2aff92c2f59e5"
+  },
+  "tests": [
+    {
+      "test_id": "T-01",
+      "title": "Implementation-only change, default base",
+      "components": ["C1", "C2", "C3", "C5"],
+      "criteria": ["AC-01"],
+      "tag": "c1-impl-only",
+      "base_tag": "c0-initial",
+      "changes": [
+        {"path": "src/model.py", "old_path": null, "change_type": "MODIFIED", "category": "IMPLEMENTATION"}
+      ]
+    },
+    {
+      "test_id": "T-02",
+      "title": "Added, modified and deleted files",
+      "components": ["C1", "C2", "C3", "C5"],
+      "criteria": ["AC-01"],
+      "tag": "c2-add-mod-del",
+      "changes": [
+        {"path": "docs/model.md", "old_path": null, "change_type": "MODIFIED", "category": "OTHER"},
+        {"path": "src/eval.py", "old_path": null, "change_type": "ADDED", "category": "IMPLEMENTATION"},
+        {"path": "src/train.py", "old_path": null, "change_type": "DELETED", "category": "IMPLEMENTATION"}
+      ]
+    },
+    {
+      "test_id": "T-03",
+      "title": "Rename detection",
+      "components": ["C1", "C2", "C3", "C5"],
+      "criteria": ["AC-01"],
+      "tag": "c3-rename",
+      "changes": [
+        {"path": "src/evaluate.py", "old_path": "src/eval.py", "change_type": "RENAMED", "category": "IMPLEMENTATION"}
+      ]
+    },
+    {
+      "test_id": "T-04",
+      "title": "Requirement/specification/design/architecture categories",
+      "components": ["C1", "C2", "C3", "C5"],
+      "criteria": ["AC-01"],
+      "tag": "c4-categories",
+      "changes": [
+        {"path": "docs/architecture/overview.md", "old_path": null, "change_type": "MODIFIED", "category": "ARCHITECTURE"},
+        {"path": "docs/design/decisions.md", "old_path": null, "change_type": "MODIFIED", "category": "DESIGN"},
+        {"path": "requirements/REQUIREMENTS.md", "old_path": null, "change_type": "MODIFIED", "category": "REQUIREMENT"},
+        {"path": "specs/api.yaml", "old_path": null, "change_type": "MODIFIED", "category": "SPECIFICATION"}
+      ]
+    },
+    {
+      "test_id": "T-05",
+      "title": "Unsupported binary files are skipped",
+      "components": ["C1", "C2", "C3", "C5"],
+      "criteria": ["AC-01"],
+      "tag": "c6-binary",
+      "changes": [
+        {"path": "assets/logo.png", "old_path": null, "change_type": "MODIFIED", "category": "OTHER"},
+        {"path": "data/weights.bin", "old_path": null, "change_type": "ADDED", "category": "OTHER"}
+      ],
+      "skipped": [
+        {"path": "assets/logo.png", "reason": "UNSUPPORTED_FILE_TYPE"},
+        {"path": "data/weights.bin", "reason": "UNSUPPORTED_FILE_TYPE"}
+      ]
+    },
+    {
+      "test_id": "T-06",
+      "title": "Explicit base_commit across several commits",
+      "components": ["C1", "C2", "C3", "C5"],
+      "criteria": ["AC-01"],
+      "tag": "c3-rename",
+      "base_tag": "c0-initial",
+      "explicit_base": true,
+      "changes": [
+        {"path": "docs/model.md", "old_path": null, "change_type": "MODIFIED", "category": "OTHER"},
+        {"path": "src/evaluate.py", "old_path": null, "change_type": "ADDED", "category": "IMPLEMENTATION"},
+        {"path": "src/model.py", "old_path": null, "change_type": "MODIFIED", "category": "IMPLEMENTATION"},
+        {"path": "src/train.py", "old_path": null, "change_type": "DELETED", "category": "IMPLEMENTATION"}
+      ]
+    },
+    {
+      "test_id": "T-07",
+      "title": "Root commit boundary",
+      "components": ["C1", "C2", "C3", "C5"],
+      "criteria": ["AC-01"],
+      "tag": "c0-initial",
+      "root": true,
+      "root_paths": [
+        "LICENSE", "README.md", "assets/logo.png", "docs/architecture/overview.md", "docs/design/decisions.md",
+        "docs/model.md", "docs/training.md", "requirements/REQUIREMENTS.md", "specs/api.yaml", "src/model.py", "src/train.py"
+      ]
+    }
+  ]
+}
